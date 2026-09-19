@@ -1,0 +1,4956 @@
+<?php
+/**
+ * ============================================================
+ * GUDANG DIGITAL - INVENTARIS KARTIKA 2
+ * ============================================================
+ *
+ * FITUR:
+ * - Menampilkan data gudang
+ * - Search
+ * - Filter jenis barang
+ * - Filter status
+ * - Statistik
+ * - Detail barang
+ * - Edit status
+ * - Hapus data
+ * - Restore ke inventaris_kartika2
+ * - Kirim PC
+ * - Kirim Printer 1
+ * - Kirim Printer 2
+ * - Kirim PC + Printer
+ *
+ * TUJUAN KIRIM:
+ *
+ * Kartika 1 -> inventaris_kartika1
+ * Kartika 2 -> inventaris_kartika2
+ * Kartika 3 -> inventaris_kartika3
+ * CICU      -> inventaris_cicu
+ * CVC       -> inventaris_cvc
+ *
+ * ============================================================
+ */
+
+include 'koneksi.php';
+
+date_default_timezone_set('Asia/Jakarta');
+
+
+/* ============================================================
+   HELPER
+============================================================ */
+
+function esc($value)
+{
+    return htmlspecialchars(
+        (string)($value ?? ''),
+        ENT_QUOTES,
+        'UTF-8'
+    );
+}
+
+
+function dbesc($value)
+{
+    global $conn;
+
+    return mysqli_real_escape_string(
+        $conn,
+        trim((string)($value ?? ''))
+    );
+}
+
+
+/* ============================================================
+   FUNGSI PESAN ERROR
+============================================================ */
+
+function showError($title, $message)
+{
+    echo '
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <title>Error</title>
+
+        <style>
+            body {
+                margin:0;
+                padding:30px;
+                background:#0f172a;
+                color:white;
+                font-family:Arial,sans-serif;
+            }
+
+            .error-box {
+                max-width:1000px;
+                margin:40px auto;
+                background:#7f1d1d;
+                border:1px solid #ef4444;
+                border-radius:18px;
+                padding:30px;
+                box-shadow:0 20px 50px rgba(0,0,0,.35);
+            }
+
+            h2 {
+                margin-top:0;
+            }
+
+            .back {
+                display:inline-block;
+                margin-top:20px;
+                padding:12px 20px;
+                border-radius:10px;
+                background:white;
+                color:#7f1d1d;
+                text-decoration:none;
+                font-weight:bold;
+            }
+
+            pre {
+                white-space:pre-wrap;
+                background:#450a0a;
+                padding:15px;
+                border-radius:10px;
+                overflow:auto;
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <div class="error-box">
+
+            <h2>' . esc($title) . '</h2>
+
+            <p>' . esc($message) . '</p>
+
+            <a class="back" href="gudang.php">
+                ← Kembali ke Gudang
+            </a>
+
+        </div>
+
+    </body>
+    </html>
+    ';
+
+    exit;
+}
+
+
+/* ============================================================
+   FUNGSI CEK KOLOM
+============================================================ */
+
+function getTableColumns($table)
+{
+    global $conn;
+
+    $columns = [];
+
+    $safeTable = str_replace('`', '``', $table);
+
+    $result = mysqli_query(
+        $conn,
+        "SHOW COLUMNS FROM `{$safeTable}`"
+    );
+
+    if (!$result) {
+
+        showError(
+            'Database Error',
+            'Gagal membaca struktur tabel ' .
+            $table .
+            ': ' .
+            mysqli_error($conn)
+        );
+    }
+
+    while ($row = mysqli_fetch_assoc($result)) {
+        $columns[] = $row['Field'];
+    }
+
+    return $columns;
+}
+
+
+/* ============================================================
+   FUNGSI CEK TABEL
+============================================================ */
+
+function tableExists($table)
+{
+    global $conn;
+
+    $table = mysqli_real_escape_string(
+        $conn,
+        $table
+    );
+
+    $result = mysqli_query(
+        $conn,
+        "SHOW TABLES LIKE '{$table}'"
+    );
+
+    return $result &&
+           mysqli_num_rows($result) > 0;
+}
+
+
+/* ============================================================
+   PROSES UPDATE STATUS
+============================================================ */
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['update_status'])
+) {
+
+    $id = intval(
+        $_POST['id'] ?? 0
+    );
+
+    $status = trim(
+        $_POST['status_gudang'] ?? 'Stok'
+    );
+
+    $statusAllowed = [
+        'Stok',
+        'Perbaikan',
+        'Siap Pakai',
+        'Rusak'
+    ];
+
+    if (
+        !in_array(
+            $status,
+            $statusAllowed,
+            true
+        )
+    ) {
+        $status = 'Stok';
+    }
+
+
+    if ($id > 0) {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "
+            UPDATE gudang_kartika2
+            SET status_gudang = ?
+            WHERE id = ?
+            LIMIT 1
+            "
+        );
+
+        if ($stmt) {
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "si",
+                $status,
+                $id
+            );
+
+            mysqli_stmt_execute($stmt);
+
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+
+    header(
+        'Location: gudang.php?status=updated'
+    );
+
+    exit;
+}
+
+
+/* ============================================================
+   PROSES HAPUS
+============================================================ */
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['hapus_gudang'])
+) {
+
+    $id = intval(
+        $_POST['id'] ?? 0
+    );
+
+
+    if ($id > 0) {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "
+            DELETE FROM gudang_kartika2
+            WHERE id = ?
+            LIMIT 1
+            "
+        );
+
+        if ($stmt) {
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "i",
+                $id
+            );
+
+            mysqli_stmt_execute($stmt);
+
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+
+    header(
+        'Location: gudang.php?status=deleted'
+    );
+
+    exit;
+}
+
+
+/* ============================================================
+   PROSES RESTORE
+============================================================ */
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['restore_gudang'])
+) {
+
+    $idGudang = intval(
+        $_POST['id'] ?? 0
+    );
+
+
+    /* --------------------------------------------------------
+       VALIDASI ID GUDANG
+    -------------------------------------------------------- */
+
+    if ($idGudang <= 0) {
+
+        showError(
+            'Restore Gagal',
+            'ID data gudang tidak valid.'
+        );
+    }
+
+
+    /* --------------------------------------------------------
+       MULAI TRANSACTION
+    -------------------------------------------------------- */
+
+    mysqli_begin_transaction($conn);
+
+
+    try {
+
+        /* ----------------------------------------------------
+           AMBIL DATA DARI GUDANG
+        ---------------------------------------------------- */
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "
+            SELECT *
+            FROM gudang_kartika2
+            WHERE id = ?
+            LIMIT 1
+            "
+        );
+
+
+        if (!$stmt) {
+
+            throw new Exception(
+                'Gagal mengambil data gudang: ' .
+                mysqli_error($conn)
+            );
+        }
+
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idGudang
+        );
+
+
+        if (
+            !mysqli_stmt_execute($stmt)
+        ) {
+
+            $error = mysqli_stmt_error($stmt);
+
+            mysqli_stmt_close($stmt);
+
+            throw new Exception(
+                'Gagal mengambil data gudang: ' .
+                $error
+            );
+        }
+
+
+        $result =
+            mysqli_stmt_get_result($stmt);
+
+
+        $dataGudang =
+            mysqli_fetch_assoc($result);
+
+
+        mysqli_stmt_close($stmt);
+
+
+        /* ----------------------------------------------------
+           DATA TIDAK DITEMUKAN
+        ---------------------------------------------------- */
+
+        if (!$dataGudang) {
+
+            throw new Exception(
+                'Data gudang tidak ditemukan.'
+            );
+        }
+
+
+        /* ----------------------------------------------------
+           AMBIL ID ASAL
+           
+           INI ADALAH ID ASLI DI
+           inventaris_kartika2
+        ---------------------------------------------------- */
+
+        $idAsal = intval(
+            $dataGudang['id_asal'] ?? 0
+        );
+
+
+        if ($idAsal <= 0) {
+
+            throw new Exception(
+                'Data gudang tidak mempunyai id_asal yang valid.'
+            );
+        }
+
+
+        /* ----------------------------------------------------
+           CEK TABEL INVENTARIS
+        ---------------------------------------------------- */
+
+        if (
+            !tableExists(
+                'inventaris_kartika2'
+            )
+        ) {
+
+            throw new Exception(
+                'Tabel inventaris_kartika2 tidak ditemukan.'
+            );
+        }
+
+
+        /* ----------------------------------------------------
+           AMBIL STRUKTUR KOLOM
+        ---------------------------------------------------- */
+
+        $columnsGudang =
+            getTableColumns(
+                'gudang_kartika2'
+            );
+
+
+        $columnsInventaris =
+            getTableColumns(
+                'inventaris_kartika2'
+            );
+
+
+        /* ----------------------------------------------------
+           CARI KOLOM YANG SAMA
+        ---------------------------------------------------- */
+
+        $commonColumns =
+            array_intersect(
+                $columnsGudang,
+                $columnsInventaris
+            );
+
+
+        /*
+         * Jangan mengubah:
+         *
+         * id
+         * id_asal
+         * status_gudang
+         *
+         * karena:
+         *
+         * id         = ID asli inventaris
+         * id_asal    = referensi gudang
+         * status_gudang hanya milik gudang
+         */
+
+        $commonColumns =
+            array_values(
+                array_diff(
+                    $commonColumns,
+                    [
+                        'id',
+                        'id_asal',
+                        'status_gudang'
+                    ]
+                )
+            );
+
+
+        /* ====================================================
+           CEK APAKAH ID ASLI MASIH ADA
+        ==================================================== */
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "
+            SELECT id
+            FROM inventaris_kartika2
+            WHERE id = ?
+            LIMIT 1
+            "
+        );
+
+
+        if (!$stmt) {
+
+            throw new Exception(
+                'Gagal memeriksa data inventaris: ' .
+                mysqli_error($conn)
+            );
+        }
+
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idAsal
+        );
+
+
+        if (
+            !mysqli_stmt_execute($stmt)
+        ) {
+
+            $error = mysqli_stmt_error($stmt);
+
+            mysqli_stmt_close($stmt);
+
+            throw new Exception(
+                'Gagal memeriksa data inventaris: ' .
+                $error
+            );
+        }
+
+
+        $result =
+            mysqli_stmt_get_result($stmt);
+
+
+        $sudahAda =
+            mysqli_fetch_assoc($result);
+
+
+        mysqli_stmt_close($stmt);
+
+
+        /* ====================================================
+           JIKA DATA ASLI MASIH ADA
+           
+           UPDATE DATA ASLI
+        ==================================================== */
+
+        if ($sudahAda) {
+
+            /* ------------------------------------------------
+               Jika tidak ada kolom yang cocok
+            ------------------------------------------------ */
+
+            if (empty($commonColumns)) {
+
+                throw new Exception(
+                    'Tidak ditemukan kolom yang cocok antara gudang_kartika2 dan inventaris_kartika2.'
+                );
+            }
+
+
+            /* ------------------------------------------------
+               BENTUK SET DINAMIS
+            ------------------------------------------------ */
+
+            $setParts = [];
+            $updateValues = [];
+
+
+            foreach (
+                $commonColumns as $column
+            ) {
+
+                /*
+                 * Jangan update kolom id.
+                 */
+
+                if ($column === 'id') {
+                    continue;
+                }
+
+
+                $setParts[] =
+                    '`' .
+                    str_replace(
+                        '`',
+                        '``',
+                        $column
+                    ) .
+                    '` = ?';
+
+
+                $updateValues[] =
+                    (string)(
+                        $dataGudang[$column]
+                        ?? ''
+                    );
+            }
+
+
+            if (empty($setParts)) {
+
+                throw new Exception(
+                    'Tidak ada kolom yang dapat diperbarui pada inventaris_kartika2.'
+                );
+            }
+
+
+            /* ------------------------------------------------
+               UPDATE DATA ASLI
+            ------------------------------------------------ */
+
+            $updateSql =
+
+                "UPDATE `inventaris_kartika2`
+                 SET " .
+                 implode(
+                     ', ',
+                     $setParts
+                 ) .
+                 "
+                 WHERE `id` = ?
+                 LIMIT 1";
+
+
+            $stmt =
+                mysqli_prepare(
+                    $conn,
+                    $updateSql
+                );
+
+
+            if (!$stmt) {
+
+                throw new Exception(
+                    'Gagal menyiapkan UPDATE inventaris: ' .
+                    mysqli_error($conn)
+                );
+            }
+
+
+            /*
+             * Tambahkan id asli sebagai parameter terakhir.
+             */
+
+            $updateValues[] =
+                $idAsal;
+
+
+            /*
+             * Semua kolom data dianggap string,
+             * ID terakhir integer.
+             */
+
+            $types =
+                str_repeat(
+                    's',
+                    count($updateValues) - 1
+                ) . 'i';
+
+
+            $bindParams = [];
+
+            $bindParams[] =
+                $stmt;
+
+            $bindParams[] =
+                $types;
+
+
+            foreach (
+                $updateValues
+                as $key => $value
+            ) {
+
+                $bindParams[] =
+                    &$updateValues[$key];
+            }
+
+
+            call_user_func_array(
+                'mysqli_stmt_bind_param',
+                $bindParams
+            );
+
+
+            if (
+                !mysqli_stmt_execute($stmt)
+            ) {
+
+                $error =
+                    mysqli_stmt_error($stmt);
+
+                mysqli_stmt_close($stmt);
+
+                throw new Exception(
+                    'Gagal mengembalikan data ke inventaris_kartika2: ' .
+                    $error
+                );
+            }
+
+
+            mysqli_stmt_close($stmt);
+
+
+        }
+
+        /* ====================================================
+           JIKA DATA ASLI SUDAH TIDAK ADA
+           
+           INSERT KEMBALI DENGAN ID ASLI
+        ==================================================== */
+
+        else {
+
+            /*
+             * Kolom INSERT:
+             *
+             * id = id_asal
+             */
+
+            $insertColumns = [
+                'id'
+            ];
+
+
+            $insertValues = [
+                $idAsal
+            ];
+
+
+            foreach (
+                $commonColumns
+                as $column
+            ) {
+
+                $insertColumns[] =
+                    $column;
+
+
+                $insertValues[] =
+                    $dataGudang[$column]
+                    ?? null;
+            }
+
+
+            /* ------------------------------------------------
+               QUOTE NAMA KOLOM
+            ------------------------------------------------ */
+
+            $quotedColumns = [];
+
+
+            foreach (
+                $insertColumns
+                as $column
+            ) {
+
+                $quotedColumns[] =
+                    '`' .
+                    str_replace(
+                        '`',
+                        '``',
+                        $column
+                    ) .
+                    '`';
+            }
+
+
+            /* ------------------------------------------------
+               PLACEHOLDER
+            ------------------------------------------------ */
+
+            $placeholders =
+                implode(
+                    ', ',
+                    array_fill(
+                        0,
+                        count($insertValues),
+                        '?'
+                    )
+                );
+
+
+            /* ------------------------------------------------
+               SQL INSERT
+            ------------------------------------------------ */
+
+            $insertSql =
+
+                "INSERT INTO `inventaris_kartika2`
+                (" .
+                implode(
+                    ', ',
+                    $quotedColumns
+                ) .
+                ")
+                VALUES (" .
+                $placeholders .
+                ")";
+
+
+            $stmt =
+                mysqli_prepare(
+                    $conn,
+                    $insertSql
+                );
+
+
+            if (!$stmt) {
+
+                throw new Exception(
+                    'Gagal menyiapkan INSERT inventaris: ' .
+                    mysqli_error($conn)
+                );
+            }
+
+
+            /* ------------------------------------------------
+               SEMUA VALUE STRING
+            ------------------------------------------------ */
+
+            $types =
+                str_repeat(
+                    's',
+                    count($insertValues)
+                );
+
+
+            $bindParams = [];
+
+            $bindParams[] =
+                $stmt;
+
+            $bindParams[] =
+                $types;
+
+
+            foreach (
+                $insertValues
+                as $key => $value
+            ) {
+
+                /*
+                 * NULL tetap dikirim sebagai string kosong
+                 * untuk kompatibilitas dengan struktur tabel.
+                 */
+
+                if ($value === null) {
+                    $insertValues[$key] = '';
+                }
+
+
+                $bindParams[] =
+                    &$insertValues[$key];
+            }
+
+
+            call_user_func_array(
+                'mysqli_stmt_bind_param',
+                $bindParams
+            );
+
+
+            /* ------------------------------------------------
+               EXECUTE INSERT
+            ------------------------------------------------ */
+
+            if (
+                !mysqli_stmt_execute($stmt)
+            ) {
+
+                $error =
+                    mysqli_stmt_error($stmt);
+
+                mysqli_stmt_close($stmt);
+
+                throw new Exception(
+                    'Gagal membuat kembali data di inventaris_kartika2: ' .
+                    $error
+                );
+            }
+
+
+            mysqli_stmt_close($stmt);
+        }
+
+
+        /* ====================================================
+           SETELAH DATA BERHASIL DIKEMBALIKAN
+           
+           BARU HAPUS DATA DARI GUDANG
+        ==================================================== */
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "
+            DELETE FROM gudang_kartika2
+            WHERE id = ?
+            LIMIT 1
+            "
+        );
+
+
+        if (!$stmt) {
+
+            throw new Exception(
+                'Gagal menyiapkan penghapusan data gudang: ' .
+                mysqli_error($conn)
+            );
+        }
+
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idGudang
+        );
+
+
+        if (
+            !mysqli_stmt_execute($stmt)
+        ) {
+
+            $error =
+                mysqli_stmt_error($stmt);
+
+            mysqli_stmt_close($stmt);
+
+            throw new Exception(
+                'Gagal menghapus data dari gudang: ' .
+                $error
+            );
+        }
+
+
+        /*
+         * Pastikan memang ada data yang dihapus.
+         */
+
+        $affectedRows =
+            mysqli_stmt_affected_rows($stmt);
+
+
+        mysqli_stmt_close($stmt);
+
+
+        if ($affectedRows <= 0) {
+
+            throw new Exception(
+                'Data gudang tidak berhasil dihapus setelah proses restore.'
+            );
+        }
+
+
+        /* ====================================================
+           COMMIT
+        ==================================================== */
+
+        mysqli_commit($conn);
+
+
+        /* ====================================================
+           KEMBALI KE GUDANG
+        ==================================================== */
+
+        header(
+            'Location: gudang.php?status=restore_sukses'
+        );
+
+        exit;
+
+
+    } catch (Throwable $e) {
+
+        /*
+         * Jika salah satu proses gagal,
+         * seluruh perubahan dibatalkan.
+         */
+
+        mysqli_rollback($conn);
+
+
+        showError(
+            'Restore ke Inventaris Gagal',
+            $e->getMessage()
+        );
+    }
+}
+
+
+/* ============================================================
+   PROSES KIRIM KE RUANGAN / UNIT LAIN
+============================================================ */
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['kirim_ruangan'])
+) {
+
+    /* --------------------------------------------------------
+       DATA FORM
+    -------------------------------------------------------- */
+
+    $idGudang = intval(
+        $_POST['id'] ?? 0
+    );
+
+    $tipeKirim = trim(
+        $_POST['tipe_kirim'] ?? ''
+    );
+
+    $tujuanKirim = trim(
+        $_POST['tujuan_kirim'] ?? ''
+    );
+
+    $gedungTujuan = trim(
+        $_POST['gedung_tujuan'] ?? ''
+    );
+
+    $lantaiTujuan = trim(
+        $_POST['lantai_tujuan'] ?? ''
+    );
+
+    $ruanganTujuan = trim(
+        $_POST['ruangan_tujuan'] ?? ''
+    );
+
+    $userTujuan = trim(
+        $_POST['nama_user_tujuan'] ?? ''
+    );
+
+    $catatanKirim = trim(
+        $_POST['catatan_kirim'] ?? ''
+    );
+
+
+    /* --------------------------------------------------------
+       VALIDASI JENIS KIRIM
+    -------------------------------------------------------- */
+
+    $allowedTypes = [
+        'pc',
+        'printer1',
+        'printer2',
+        'semua'
+    ];
+
+
+    if (
+        $idGudang <= 0 ||
+        !in_array(
+            $tipeKirim,
+            $allowedTypes,
+            true
+        )
+    ) {
+
+        showError(
+            'Kirim Gagal',
+            'Jenis barang yang akan dikirim tidak valid.'
+        );
+    }
+
+
+    /* --------------------------------------------------------
+       MAPPING TUJUAN KE TABEL DATABASE
+    -------------------------------------------------------- */
+
+    $destinationMap = [
+
+        'kartika1' =>
+            'inventaris_kartika1',
+
+        'kartika2' =>
+            'inventaris_kartika2',
+
+        'kartika3' =>
+            'inventaris_kartika3',
+
+        'cicu' =>
+            'inventaris_cicu',
+
+        'cvc' =>
+            'inventaris_cvc'
+
+    ];
+
+
+    if (
+        !isset(
+            $destinationMap[
+                $tujuanKirim
+            ]
+        )
+    ) {
+
+        showError(
+            'Kirim Gagal',
+            'Tujuan pengiriman tidak valid.'
+        );
+    }
+
+
+    $destinationTable =
+        $destinationMap[
+            $tujuanKirim
+        ];
+
+
+    /* --------------------------------------------------------
+       VALIDASI TUJUAN
+    -------------------------------------------------------- */
+
+    if (
+        $gedungTujuan === '' ||
+        $lantaiTujuan === '' ||
+        $ruanganTujuan === ''
+    ) {
+
+        showError(
+            'Kirim Gagal',
+            'Gedung, lantai, dan ruangan tujuan wajib diisi.'
+        );
+    }
+
+
+    /* --------------------------------------------------------
+       CEK TABEL TUJUAN
+    -------------------------------------------------------- */
+
+    if (
+        !tableExists(
+            $destinationTable
+        )
+    ) {
+
+        showError(
+            'Tabel Tujuan Tidak Ditemukan',
+            'Tabel ' .
+            $destinationTable .
+            ' belum tersedia di database.'
+        );
+    }
+
+
+    /* --------------------------------------------------------
+       AMBIL DATA GUDANG
+    -------------------------------------------------------- */
+
+    $stmt = mysqli_prepare(
+        $conn,
+        "
+        SELECT *
+        FROM gudang_kartika2
+        WHERE id = ?
+        LIMIT 1
+        "
+    );
+
+
+    if (!$stmt) {
+
+        showError(
+            'Kirim Gagal',
+            mysqli_error($conn)
+        );
+    }
+
+
+    mysqli_stmt_bind_param(
+        $stmt,
+        'i',
+        $idGudang
+    );
+
+
+    mysqli_stmt_execute($stmt);
+
+
+    $result =
+        mysqli_stmt_get_result($stmt);
+
+
+    $dataGudang =
+        mysqli_fetch_assoc($result);
+
+
+    mysqli_stmt_close($stmt);
+
+
+    if (!$dataGudang) {
+
+        showError(
+            'Kirim Gagal',
+            'Data barang tidak ditemukan di gudang.'
+        );
+    }
+
+
+    /* --------------------------------------------------------
+       CEK KOMPONEN
+    -------------------------------------------------------- */
+
+    $hasPC =
+        trim(
+            (string)(
+                $dataGudang['nama_pc']
+                ?? ''
+            )
+        ) !== '';
+
+
+    $hasPrinter1 =
+        trim(
+            (string)(
+                $dataGudang['printer_1']
+                ?? ''
+            )
+        ) !== '';
+
+
+    $hasPrinter2 =
+        trim(
+            (string)(
+                $dataGudang['printer_2']
+                ?? ''
+            )
+        ) !== '';
+
+
+    /* --------------------------------------------------------
+       VALIDASI KOMPONEN
+    -------------------------------------------------------- */
+
+    if (
+        $tipeKirim === 'pc' &&
+        !$hasPC
+    ) {
+
+        showError(
+            'Kirim Gagal',
+            'Data ini tidak mempunyai PC.'
+        );
+    }
+
+
+    if (
+        $tipeKirim === 'printer1' &&
+        !$hasPrinter1
+    ) {
+
+        showError(
+            'Kirim Gagal',
+            'Data ini tidak mempunyai Printer 1.'
+        );
+    }
+
+
+    if (
+        $tipeKirim === 'printer2' &&
+        !$hasPrinter2
+    ) {
+
+        showError(
+            'Kirim Gagal',
+            'Data ini tidak mempunyai Printer 2.'
+        );
+    }
+
+
+    if (
+        $tipeKirim === 'semua' &&
+        !$hasPC &&
+        !$hasPrinter1 &&
+        !$hasPrinter2
+    ) {
+
+        showError(
+            'Kirim Gagal',
+            'Tidak ada perangkat yang dapat dikirim.'
+        );
+    }
+
+
+    /* ========================================================
+       BENTUK DATA YANG AKAN DIKIRIM
+    ======================================================== */
+
+    $sourceFields = [
+
+        'gedung',
+        'lantai',
+        'ruangan',
+
+        'nama_pc',
+        'nama_user',
+
+        'manufactur',
+        'processor_type',
+        'windows_version',
+
+        'ram_size',
+        'ram_hardisk',
+
+        'monitor_model',
+        'monitor_size',
+        'monitor_vga',
+
+        'printer_1',
+        'printer_2',
+
+        'tahun_pengadaan',
+
+        'id_personil_edp'
+
+    ];
+
+
+    $payload = [];
+
+
+    foreach (
+        $sourceFields
+        as $field
+    ) {
+
+        $payload[$field] =
+            (string)(
+                $dataGudang[$field]
+                ?? ''
+            );
+    }
+
+
+    /* ========================================================
+       LOGIKA KOMPONEN
+    ======================================================== */
+
+    /*
+     * PC SAJA
+     */
+
+    if (
+        $tipeKirim === 'pc'
+    ) {
+
+        $payload['printer_1'] = '';
+        $payload['printer_2'] = '';
+    }
+
+
+    /*
+     * PRINTER 1 SAJA
+     *
+     * PC dikosongkan.
+     * Printer 2 dikosongkan.
+     */
+
+    elseif (
+        $tipeKirim === 'printer1'
+    ) {
+
+        $pcFields = [
+
+            'nama_pc',
+            'nama_user',
+
+            'manufactur',
+            'processor_type',
+            'windows_version',
+
+            'ram_size',
+            'ram_hardisk',
+
+            'monitor_model',
+            'monitor_size',
+            'monitor_vga',
+
+            'printer_2',
+
+            'tahun_pengadaan',
+            'id_personil_edp'
+
+        ];
+
+
+        foreach (
+            $pcFields
+            as $field
+        ) {
+
+            $payload[$field] = '';
+        }
+    }
+
+
+    /*
+     * PRINTER 2 SAJA
+     */
+
+    elseif (
+        $tipeKirim === 'printer2'
+    ) {
+
+        $pcFields = [
+
+            'nama_pc',
+            'nama_user',
+
+            'manufactur',
+            'processor_type',
+            'windows_version',
+
+            'ram_size',
+            'ram_hardisk',
+
+            'monitor_model',
+            'monitor_size',
+            'monitor_vga',
+
+            'printer_1',
+
+            'tahun_pengadaan',
+            'id_personil_edp'
+
+        ];
+
+
+        foreach (
+            $pcFields
+            as $field
+        ) {
+
+            $payload[$field] = '';
+        }
+    }
+
+
+    /*
+     * SEMUA
+     *
+     * PC + Printer yang tersedia
+     * ikut dikirim.
+     */
+
+
+    /* ========================================================
+       LOKASI TUJUAN
+    ======================================================== */
+
+    $payload['gedung'] =
+        $gedungTujuan;
+
+    $payload['lantai'] =
+        $lantaiTujuan;
+
+    $payload['ruangan'] =
+        $ruanganTujuan;
+
+
+    /*
+     * Nama user tujuan
+     */
+
+    if (
+        $userTujuan !== ''
+    ) {
+
+        $payload['nama_user'] =
+            $userTujuan;
+    }
+
+
+    /* ========================================================
+       JENIS BARANG
+    ======================================================== */
+
+    $jenisBarang = 'Lainnya';
+
+
+    if (
+        $tipeKirim === 'pc'
+    ) {
+
+        $jenisBarang = 'PC';
+
+    } elseif (
+        $tipeKirim === 'printer1'
+    ) {
+
+        $jenisBarang = 'Printer 1';
+
+    } elseif (
+        $tipeKirim === 'printer2'
+    ) {
+
+        $jenisBarang = 'Printer 2';
+
+    } elseif (
+        $tipeKirim === 'semua'
+    ) {
+
+        if (
+            $hasPC &&
+            ($hasPrinter1 || $hasPrinter2)
+        ) {
+
+            $jenisBarang =
+                'PC + Printer';
+
+        } elseif ($hasPC) {
+
+            $jenisBarang =
+                'PC';
+
+        } elseif ($hasPrinter1) {
+
+            $jenisBarang =
+                'Printer 1';
+
+        } elseif ($hasPrinter2) {
+
+            $jenisBarang =
+                'Printer 2';
+        }
+    }
+
+
+    /* ========================================================
+       TAMBAHAN METADATA
+    ======================================================== */
+
+    $destinationColumns =
+        getTableColumns(
+            $destinationTable
+        );
+
+
+    if (
+        in_array(
+            'status',
+            $destinationColumns,
+            true
+        )
+    ) {
+
+        $payload['status'] =
+            'Aktif';
+    }
+
+
+    if (
+        in_array(
+            'status_barang',
+            $destinationColumns,
+            true
+        )
+    ) {
+
+        $payload['status_barang'] =
+            'Aktif';
+    }
+
+
+    if (
+        in_array(
+            'jenis_barang',
+            $destinationColumns,
+            true
+        )
+    ) {
+
+        $payload['jenis_barang'] =
+            $jenisBarang;
+    }
+
+
+    if (
+        in_array(
+            'keterangan',
+            $destinationColumns,
+            true
+        )
+    ) {
+
+        $payload['keterangan'] =
+            $catatanKirim;
+    }
+
+
+    if (
+        in_array(
+            'catatan',
+            $destinationColumns,
+            true
+        )
+    ) {
+
+        $payload['catatan'] =
+            $catatanKirim;
+    }
+
+
+    $now =
+        date('Y-m-d H:i:s');
+
+
+    if (
+        in_array(
+            'tanggal_masuk',
+            $destinationColumns,
+            true
+        )
+    ) {
+
+        $payload['tanggal_masuk'] =
+            $now;
+    }
+
+
+    if (
+        in_array(
+            'tanggal',
+            $destinationColumns,
+            true
+        )
+    ) {
+
+        $payload['tanggal'] =
+            $now;
+    }
+
+
+    if (
+        in_array(
+            'created_at',
+            $destinationColumns,
+            true
+        )
+    ) {
+
+        $payload['created_at'] =
+            $now;
+    }
+
+
+    /* ========================================================
+       HANYA KOLOM YANG ADA DI TABEL TUJUAN
+    ======================================================== */
+
+    $insertColumns = [];
+    $insertValues = [];
+
+
+    foreach (
+        $payload
+        as $field => $value
+    ) {
+
+        if (
+            $field === 'id'
+        ) {
+            continue;
+        }
+
+
+        if (
+            in_array(
+                $field,
+                $destinationColumns,
+                true
+            )
+        ) {
+
+            $insertColumns[] =
+                $field;
+
+            $insertValues[] =
+                $value;
+        }
+    }
+
+
+    if (
+        empty($insertColumns)
+    ) {
+
+        showError(
+            'Kirim Gagal',
+            'Tidak ditemukan kolom yang cocok antara gudang_kartika2 dan ' .
+            $destinationTable
+        );
+    }
+
+
+    /* ========================================================
+       TRANSACTION
+    ======================================================== */
+
+    mysqli_begin_transaction(
+        $conn
+    );
+
+
+    try {
+
+        /* ----------------------------------------------------
+           SQL INSERT DINAMIS
+        ---------------------------------------------------- */
+
+        $quotedColumns = [];
+
+
+        foreach (
+            $insertColumns
+            as $column
+        ) {
+
+            $quotedColumns[] =
+                '`' .
+                str_replace(
+                    '`',
+                    '``',
+                    $column
+                ) .
+                '`';
+        }
+
+
+        $placeholders =
+            implode(
+                ', ',
+                array_fill(
+                    0,
+                    count($insertColumns),
+                    '?'
+                )
+            );
+
+
+        $insertSql =
+
+            "INSERT INTO `" .
+            str_replace(
+                '`',
+                '``',
+                $destinationTable
+            ) .
+            "` (" .
+            implode(
+                ', ',
+                $quotedColumns
+            ) .
+            ") VALUES (" .
+            $placeholders .
+            ")";
+
+
+        $stmt =
+            mysqli_prepare(
+                $conn,
+                $insertSql
+            );
+
+
+        if (!$stmt) {
+
+            throw new Exception(
+                'Gagal menyiapkan INSERT: ' .
+                mysqli_error($conn)
+            );
+        }
+
+
+        /* ----------------------------------------------------
+           BIND PARAMETER DINAMIS
+        ---------------------------------------------------- */
+
+        $types =
+            str_repeat(
+                's',
+                count($insertValues)
+            );
+
+
+        $bindParams = [];
+
+        $bindParams[] =
+            $stmt;
+
+        $bindParams[] =
+            $types;
+
+
+        foreach (
+            $insertValues
+            as $key => $value
+        ) {
+
+            $bindParams[] =
+                &$insertValues[$key];
+        }
+
+
+        call_user_func_array(
+            'mysqli_stmt_bind_param',
+            $bindParams
+        );
+
+
+        /* ----------------------------------------------------
+           EXECUTE INSERT
+        ---------------------------------------------------- */
+
+        if (
+            !mysqli_stmt_execute($stmt)
+        ) {
+
+            $error =
+                mysqli_stmt_error($stmt);
+
+            mysqli_stmt_close($stmt);
+
+            throw new Exception(
+                'Gagal memasukkan data ke ' .
+                $destinationTable .
+                ': ' .
+                $error
+            );
+        }
+
+
+        mysqli_stmt_close($stmt);
+
+
+        /* ====================================================
+           UPDATE / DELETE GUDANG
+        ==================================================== */
+
+        /*
+         * PC SAJA
+         *
+         * PC dihapus dari gudang,
+         * printer tetap.
+         */
+
+        if (
+            $tipeKirim === 'pc'
+        ) {
+
+            $sqlUpdate = "
+
+                UPDATE gudang_kartika2
+
+                SET
+
+                    nama_pc = '',
+                    nama_user = '',
+                    manufactur = '',
+                    processor_type = '',
+                    windows_version = '',
+                    ram_size = '',
+                    ram_hardisk = '',
+                    monitor_model = '',
+                    monitor_size = '',
+                    monitor_vga = '',
+                    tahun_pengadaan = '',
+                    id_personil_edp = ''
+
+                WHERE id = ?
+
+                LIMIT 1
+            ";
+        }
+
+
+        /*
+         * PRINTER 1 SAJA
+         *
+         * PC tetap.
+         * Printer 2 tetap.
+         */
+
+        elseif (
+            $tipeKirim === 'printer1'
+        ) {
+
+            $sqlUpdate = "
+
+                UPDATE gudang_kartika2
+
+                SET
+
+                    printer_1 = ''
+
+                WHERE id = ?
+
+                LIMIT 1
+            ";
+        }
+
+
+        /*
+         * PRINTER 2 SAJA
+         */
+
+        elseif (
+            $tipeKirim === 'printer2'
+        ) {
+
+            $sqlUpdate = "
+
+                UPDATE gudang_kartika2
+
+                SET
+
+                    printer_2 = ''
+
+                WHERE id = ?
+
+                LIMIT 1
+            ";
+        }
+
+
+        /*
+         * SEMUA
+         *
+         * Seluruh isi record dipindahkan.
+         */
+
+        else {
+
+            $sqlUpdate = "
+
+                DELETE FROM gudang_kartika2
+
+                WHERE id = ?
+
+                LIMIT 1
+            ";
+        }
+
+
+        /* ----------------------------------------------------
+           EXECUTE UPDATE GUDANG
+        ---------------------------------------------------- */
+
+        $stmt =
+            mysqli_prepare(
+                $conn,
+                $sqlUpdate
+            );
+
+
+        if (!$stmt) {
+
+            throw new Exception(
+                'Gagal menyiapkan perubahan gudang: ' .
+                mysqli_error($conn)
+            );
+        }
+
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            'i',
+            $idGudang
+        );
+
+
+        if (
+            !mysqli_stmt_execute($stmt)
+        ) {
+
+            $error =
+                mysqli_stmt_error($stmt);
+
+            mysqli_stmt_close($stmt);
+
+            throw new Exception(
+                'Gagal memperbarui gudang: ' .
+                $error
+            );
+        }
+
+
+        mysqli_stmt_close($stmt);
+
+
+        /* ----------------------------------------------------
+           COMMIT
+        ---------------------------------------------------- */
+
+        mysqli_commit(
+            $conn
+        );
+
+
+        header(
+            'Location: gudang.php?status=kirim_sukses&tujuan=' .
+            urlencode($destinationTable)
+        );
+
+        exit;
+
+
+    } catch (Throwable $e) {
+
+        mysqli_rollback(
+            $conn
+        );
+
+
+        showError(
+            'Kirim ke Tujuan Gagal',
+            $e->getMessage()
+        );
+    }
+}
+
+
+/* ============================================================
+   SEARCH & FILTER
+============================================================ */
+
+$search =
+    trim(
+        $_GET['search'] ?? ''
+    );
+
+
+$statusFilter =
+    trim(
+        $_GET['status'] ?? ''
+    );
+
+
+$jenisFilter =
+    trim(
+        $_GET['jenis'] ?? ''
+    );
+
+
+/* ============================================================
+   WHERE
+============================================================ */
+
+$where = [];
+
+
+/* ------------------------------------------------------------
+   SEARCH
+------------------------------------------------------------ */
+
+if (
+    $search !== ''
+) {
+
+    $searchDb =
+        dbesc($search);
+
+
+    $where[] = "
+
+        (
+
+            CAST(id AS CHAR)
+            LIKE '%$searchDb%'
+
+            OR
+
+            CAST(id_asal AS CHAR)
+            LIKE '%$searchDb%'
+
+            OR
+
+            gedung
+            LIKE '%$searchDb%'
+
+            OR
+
+            lantai
+            LIKE '%$searchDb%'
+
+            OR
+
+            ruangan
+            LIKE '%$searchDb%'
+
+            OR
+
+            nama_pc
+            LIKE '%$searchDb%'
+
+            OR
+
+            nama_user
+            LIKE '%$searchDb%'
+
+            OR
+
+            manufactur
+            LIKE '%$searchDb%'
+
+            OR
+
+            processor_type
+            LIKE '%$searchDb%'
+
+            OR
+
+            printer_1
+            LIKE '%$searchDb%'
+
+            OR
+
+            printer_2
+            LIKE '%$searchDb%'
+
+            OR
+
+            alasan_ganti
+            LIKE '%$searchDb%'
+
+        )
+
+    ";
+}
+
+
+/* ------------------------------------------------------------
+   FILTER STATUS
+------------------------------------------------------------ */
+
+if (
+    $statusFilter !== ''
+) {
+
+    $statusDb =
+        dbesc(
+            $statusFilter
+        );
+
+
+    $where[] =
+        "status_gudang = '$statusDb'";
+}
+
+
+/* ------------------------------------------------------------
+   FILTER JENIS
+------------------------------------------------------------ */
+
+if (
+    $jenisFilter !== ''
+) {
+
+    if (
+        $jenisFilter === 'PC'
+    ) {
+
+        $where[] = "
+
+            TRIM(
+                COALESCE(
+                    nama_pc,
+                    ''
+                )
+            ) <> ''
+
+            AND
+
+            TRIM(
+                COALESCE(
+                    printer_1,
+                    ''
+                )
+            ) = ''
+
+            AND
+
+            TRIM(
+                COALESCE(
+                    printer_2,
+                    ''
+                )
+            ) = ''
+
+        ";
+
+    } elseif (
+        $jenisFilter === 'Printer 1'
+    ) {
+
+        $where[] = "
+
+            TRIM(
+                COALESCE(
+                    nama_pc,
+                    ''
+                )
+            ) = ''
+
+            AND
+
+            TRIM(
+                COALESCE(
+                    printer_1,
+                    ''
+                )
+            ) <> ''
+
+        ";
+
+    } elseif (
+        $jenisFilter === 'Printer 2'
+    ) {
+
+        $where[] = "
+
+            TRIM(
+                COALESCE(
+                    nama_pc,
+                    ''
+                )
+            ) = ''
+
+            AND
+
+            TRIM(
+                COALESCE(
+                    printer_1,
+                    ''
+                )
+            ) = ''
+
+            AND
+
+            TRIM(
+                COALESCE(
+                    printer_2,
+                    ''
+                )
+            ) <> ''
+
+        ";
+
+    } elseif (
+        $jenisFilter === 'PC + Printer'
+    ) {
+
+        $where[] = "
+
+            TRIM(
+                COALESCE(
+                    nama_pc,
+                    ''
+                )
+            ) <> ''
+
+            AND
+
+            (
+
+                TRIM(
+                    COALESCE(
+                        printer_1,
+                        ''
+                    )
+                ) <> ''
+
+                OR
+
+                TRIM(
+                    COALESCE(
+                        printer_2,
+                        ''
+                    )
+                ) <> ''
+
+            )
+
+        ";
+    }
+}
+
+
+/* ============================================================
+   BUILD WHERE
+============================================================ */
+
+$whereSql = '';
+
+
+if (
+    !empty($where)
+) {
+
+    $whereSql =
+        'WHERE ' .
+        implode(
+            ' AND ',
+            $where
+        );
+}
+
+
+/* ============================================================
+   QUERY DATA
+============================================================ */
+
+$sql = "
+
+    SELECT *
+
+    FROM gudang_kartika2
+
+    $whereSql
+
+    ORDER BY
+
+        tanggal_masuk DESC,
+        id DESC
+
+";
+
+
+$query =
+    mysqli_query(
+        $conn,
+        $sql
+    );
+
+
+if (!$query) {
+
+    showError(
+        'Database Error',
+        mysqli_error($conn)
+    );
+}
+
+
+/* ============================================================
+   STATISTIK TOTAL
+============================================================ */
+
+$totalGudang = 0;
+
+
+$totalResult =
+    mysqli_query(
+        $conn,
+        "
+        SELECT COUNT(*) AS total
+        FROM gudang_kartika2
+        "
+    );
+
+
+if ($totalResult) {
+
+    $totalRow =
+        mysqli_fetch_assoc(
+            $totalResult
+        );
+
+
+    $totalGudang =
+        intval(
+            $totalRow['total'] ?? 0
+        );
+}
+
+
+/* ============================================================
+   STATISTIK STATUS
+============================================================ */
+
+$stats = [
+
+    'stok' =>
+        0,
+
+    'siap_pakai' =>
+        0,
+
+    'perbaikan' =>
+        0,
+
+    'rusak' =>
+        0
+];
+
+
+$statsResult =
+    mysqli_query(
+        $conn,
+        "
+
+        SELECT
+
+            SUM(
+                status_gudang = 'Stok'
+            ) AS stok,
+
+            SUM(
+                status_gudang = 'Siap Pakai'
+            ) AS siap_pakai,
+
+            SUM(
+                status_gudang = 'Perbaikan'
+            ) AS perbaikan,
+
+            SUM(
+                status_gudang = 'Rusak'
+            ) AS rusak
+
+        FROM gudang_kartika2
+
+        "
+    );
+
+
+if ($statsResult) {
+
+    $statsRow =
+        mysqli_fetch_assoc(
+            $statsResult
+        );
+
+
+    $stats['stok'] =
+        intval(
+            $statsRow['stok'] ?? 0
+        );
+
+
+    $stats['siap_pakai'] =
+        intval(
+            $statsRow['siap_pakai'] ?? 0
+        );
+
+
+    $stats['perbaikan'] =
+        intval(
+            $statsRow['perbaikan'] ?? 0
+        );
+
+
+    $stats['rusak'] =
+        intval(
+            $statsRow['rusak'] ?? 0
+        );
+}
+
+
+/* ============================================================
+   DATA GUDANG
+============================================================ */
+
+$gudangData = [];
+
+
+while (
+    $row =
+    mysqli_fetch_assoc($query)
+) {
+
+    $hasPC =
+        trim(
+            $row['nama_pc'] ?? ''
+        ) !== '';
+
+
+    $hasPrinter1 =
+        trim(
+            $row['printer_1'] ?? ''
+        ) !== '';
+
+
+    $hasPrinter2 =
+        trim(
+            $row['printer_2'] ?? ''
+        ) !== '';
+
+
+    if (
+        $hasPC &&
+        (
+            $hasPrinter1 ||
+            $hasPrinter2
+        )
+    ) {
+
+        $row['jenis_barang'] =
+            'PC + Printer';
+
+    } elseif ($hasPC) {
+
+        $row['jenis_barang'] =
+            'PC';
+
+    } elseif ($hasPrinter1) {
+
+        $row['jenis_barang'] =
+            'Printer 1';
+
+    } elseif ($hasPrinter2) {
+
+        $row['jenis_barang'] =
+            'Printer 2';
+
+    } else {
+
+        $row['jenis_barang'] =
+            'Lainnya';
+    }
+
+
+    $gudangData[] =
+        $row;
+}
+
+?>
+<!DOCTYPE html>
+
+<html lang="id">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>Gudang Digital - Kartika 2</title>
+
+
+<style>
+
+* {
+    box-sizing:border-box;
+}
+
+
+body {
+
+    margin:0;
+
+    background:
+        linear-gradient(
+            135deg,
+            #020617,
+            #0f172a,
+            #111827
+        );
+
+    color:#e5e7eb;
+
+    font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+}
+
+
+.container {
+
+    width:96%;
+
+    max-width:1700px;
+
+    margin:30px auto;
+}
+
+
+.header {
+
+    background:
+        linear-gradient(
+            135deg,
+            #1e3a8a,
+            #312e81
+        );
+
+    border-radius:22px;
+
+    padding:28px;
+
+    margin-bottom:25px;
+
+    box-shadow:
+        0 20px 50px
+        rgba(0,0,0,.35);
+}
+
+
+.header h1 {
+
+    margin:0 0 8px;
+
+    font-size:30px;
+}
+
+
+.header p {
+
+    margin:0;
+
+    color:#cbd5e1;
+}
+
+
+/* =========================================================
+   STATISTIK
+========================================================= */
+
+.stats {
+
+    display:grid;
+
+    grid-template-columns:
+        repeat(
+            5,
+            1fr
+        );
+
+    gap:15px;
+
+    margin-bottom:25px;
+}
+
+
+.stat {
+
+    padding:22px;
+
+    border-radius:18px;
+
+    background:#111827;
+
+    border:1px solid #334155;
+
+    box-shadow:
+        0 10px 30px
+        rgba(0,0,0,.2);
+}
+
+
+.stat-title {
+
+    color:#94a3b8;
+
+    font-size:13px;
+
+    margin-bottom:8px;
+}
+
+
+.stat-number {
+
+    font-size:30px;
+
+    font-weight:bold;
+}
+
+
+/* =========================================================
+   FILTER
+========================================================= */
+
+.filter {
+
+    background:#111827;
+
+    border:1px solid #334155;
+
+    border-radius:18px;
+
+    padding:20px;
+
+    margin-bottom:25px;
+}
+
+
+.filter form {
+
+    display:grid;
+
+    grid-template-columns:
+        2fr
+        1fr
+        1fr
+        auto;
+
+    gap:12px;
+}
+
+
+input,
+select,
+textarea {
+
+    width:100%;
+
+    padding:12px 14px;
+
+    border-radius:10px;
+
+    border:1px solid #475569;
+
+    background:#020617;
+
+    color:white;
+
+    outline:none;
+}
+
+
+input:focus,
+select:focus,
+textarea:focus {
+
+    border-color:#60a5fa;
+}
+
+
+button {
+
+    border:0;
+
+    cursor:pointer;
+
+    border-radius:10px;
+
+    padding:11px 16px;
+
+    font-weight:bold;
+}
+
+
+.btn {
+
+    color:white;
+
+    background:#2563eb;
+}
+
+
+.btn:hover {
+
+    background:#1d4ed8;
+}
+
+
+.btn-green {
+
+    background:#059669;
+
+    color:white;
+}
+
+
+.btn-red {
+
+    background:#dc2626;
+
+    color:white;
+}
+
+
+.btn-orange {
+
+    background:#d97706;
+
+    color:white;
+}
+
+
+.btn-gray {
+
+    background:#475569;
+
+    color:white;
+}
+
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.table-box {
+
+    background:#111827;
+
+    border:1px solid #334155;
+
+    border-radius:18px;
+
+    overflow:auto;
+
+    box-shadow:
+        0 15px 40px
+        rgba(0,0,0,.25);
+}
+
+
+table {
+
+    width:100%;
+
+    border-collapse:collapse;
+
+    min-width:1300px;
+}
+
+
+th {
+
+    background:#1e293b;
+
+    color:#cbd5e1;
+
+    padding:14px;
+
+    text-align:left;
+
+    white-space:nowrap;
+}
+
+
+td {
+
+    padding:13px;
+
+    border-top:1px solid #1e293b;
+
+    vertical-align:top;
+}
+
+
+tr:hover td {
+
+    background:#172033;
+}
+
+
+/* =========================================================
+   BADGE
+========================================================= */
+
+.badge {
+
+    display:inline-block;
+
+    padding:6px 10px;
+
+    border-radius:999px;
+
+    font-size:12px;
+
+    font-weight:bold;
+}
+
+
+.badge-blue {
+
+    background:#1d4ed8;
+
+    color:white;
+}
+
+
+.badge-green {
+
+    background:#047857;
+
+    color:white;
+}
+
+
+.badge-orange {
+
+    background:#b45309;
+
+    color:white;
+}
+
+
+.badge-red {
+
+    background:#b91c1c;
+
+    color:white;
+}
+
+
+/* =========================================================
+   ACTION
+========================================================= */
+
+.actions {
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:6px;
+}
+
+
+.actions form {
+
+    margin:0;
+}
+
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+.modal {
+
+    display:none;
+
+    position:fixed;
+
+    z-index:9999;
+
+    inset:0;
+
+    background:
+        rgba(
+            2,
+            6,
+            23,
+            .85
+        );
+
+    padding:30px;
+
+    overflow:auto;
+}
+
+
+.modal-content {
+
+    width:100%;
+
+    max-width:800px;
+
+    margin:40px auto;
+
+    background:#111827;
+
+    border:1px solid #475569;
+
+    border-radius:22px;
+
+    padding:28px;
+
+    box-shadow:
+        0 30px 80px
+        rgba(0,0,0,.5);
+}
+
+
+.modal-header {
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    margin-bottom:20px;
+}
+
+
+.modal-header h2 {
+
+    margin:0;
+}
+
+
+.close {
+
+    font-size:30px;
+
+    cursor:pointer;
+
+    color:#94a3b8;
+}
+
+
+.close:hover {
+
+    color:white;
+}
+
+
+/* =========================================================
+   KIRIM COMPONENT
+========================================================= */
+
+.component-grid {
+
+    display:grid;
+
+    grid-template-columns:
+        repeat(
+            4,
+            1fr
+        );
+
+    gap:10px;
+
+    margin:15px 0 22px;
+}
+
+
+.component-option {
+
+    position:relative;
+}
+
+
+.component-option input {
+
+    position:absolute;
+
+    opacity:0;
+}
+
+
+.component-option label {
+
+    display:block;
+
+    padding:15px;
+
+    text-align:center;
+
+    border:1px solid #475569;
+
+    border-radius:12px;
+
+    cursor:pointer;
+
+    background:#020617;
+}
+
+
+.component-option input:checked + label {
+
+    border-color:#3b82f6;
+
+    background:#1e3a8a;
+
+    box-shadow:
+        0 0 0 2px
+        rgba(
+            59,
+            130,
+            246,
+            .2
+        );
+}
+
+
+/* =========================================================
+   TUJUAN
+========================================================= */
+
+.destination-grid {
+
+    display:grid;
+
+    grid-template-columns:
+        repeat(
+            5,
+            1fr
+        );
+
+    gap:10px;
+
+    margin:15px 0 22px;
+}
+
+
+.destination-option {
+
+    position:relative;
+}
+
+
+.destination-option input {
+
+    position:absolute;
+
+    opacity:0;
+}
+
+
+.destination-option label {
+
+    display:block;
+
+    padding:14px 8px;
+
+    text-align:center;
+
+    border:1px solid #475569;
+
+    border-radius:12px;
+
+    cursor:pointer;
+
+    background:#020617;
+
+    font-size:13px;
+}
+
+
+.destination-option input:checked + label {
+
+    border-color:#10b981;
+
+    background:#065f46;
+
+    color:white;
+}
+
+
+/* =========================================================
+   FORM GRID
+========================================================= */
+
+.form-grid {
+
+    display:grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:15px;
+}
+
+
+.form-group {
+
+    margin-bottom:15px;
+}
+
+
+.form-group label {
+
+    display:block;
+
+    margin-bottom:7px;
+
+    color:#cbd5e1;
+
+    font-size:13px;
+
+    font-weight:bold;
+}
+
+
+.full {
+
+    grid-column:
+        1 / -1;
+}
+
+
+.modal-footer {
+
+    display:flex;
+
+    justify-content:flex-end;
+
+    gap:10px;
+
+    margin-top:20px;
+}
+
+
+/* =========================================================
+   DETAIL
+========================================================= */
+
+.detail-grid {
+
+    display:grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:12px;
+}
+
+
+.detail-item {
+
+    background:#020617;
+
+    padding:12px;
+
+    border-radius:10px;
+
+    border:1px solid #1e293b;
+}
+
+
+.detail-label {
+
+    color:#64748b;
+
+    font-size:11px;
+
+    margin-bottom:5px;
+}
+
+
+.detail-value {
+
+    color:#f8fafc;
+
+    font-weight:bold;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media(max-width:1000px) {
+
+    .stats {
+
+        grid-template-columns:
+            repeat(
+                2,
+                1fr
+            );
+    }
+
+
+    .filter form {
+
+        grid-template-columns:
+            1fr;
+    }
+
+
+    .component-grid {
+
+        grid-template-columns:
+            repeat(
+                2,
+                1fr
+            );
+    }
+
+
+    .destination-grid {
+
+        grid-template-columns:
+            repeat(
+                2,
+                1fr
+            );
+    }
+
+}
+
+
+@media(max-width:600px) {
+
+    .stats {
+
+        grid-template-columns:
+            1fr;
+    }
+
+
+    .form-grid {
+
+        grid-template-columns:
+            1fr;
+    }
+
+
+    .component-grid {
+
+        grid-template-columns:
+            1fr;
+    }
+
+
+    .destination-grid {
+
+        grid-template-columns:
+            1fr;
+    }
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+
+<!-- =======================================================
+     HEADER
+======================================================== -->
+
+<div class="header">
+
+    <h1>
+        🏢 Gudang Digital - Kartika 2
+    </h1>
+
+    <p>
+        Pengelolaan barang, pemindahan perangkat,
+        restore dan distribusi inventaris.
+    </p>
+
+</div>
+
+
+<!-- =======================================================
+     NOTIFIKASI
+======================================================== -->
+
+<?php
+
+if (
+    ($_GET['status'] ?? '') ===
+    'kirim_sukses'
+) {
+
+    $tujuan =
+        $_GET['tujuan'] ?? '';
+
+    echo '
+    <div style="
+        background:#065f46;
+        border:1px solid #10b981;
+        padding:15px 20px;
+        border-radius:12px;
+        margin-bottom:20px;
+    ">
+        ✅ Barang berhasil dikirim ke
+        <b>' .
+        esc($tujuan) .
+        '</b>.
+    </div>
+    ';
+}
+
+
+if (
+    ($_GET['status'] ?? '') ===
+    'restore_sukses'
+) {
+
+    echo '
+    <div style="
+        background:#065f46;
+        border:1px solid #10b981;
+        padding:15px 20px;
+        border-radius:12px;
+        margin-bottom:20px;
+    ">
+        ✅ Barang berhasil di-restore ke inventaris Kartika 2.
+    </div>
+    ';
+}
+
+
+if (
+    ($_GET['status'] ?? '') ===
+    'updated'
+) {
+
+    echo '
+    <div style="
+        background:#1e3a8a;
+        border:1px solid #3b82f6;
+        padding:15px 20px;
+        border-radius:12px;
+        margin-bottom:20px;
+    ">
+        ✅ Status barang berhasil diperbarui.
+    </div>
+    ';
+}
+
+
+if (
+    ($_GET['status'] ?? '') ===
+    'deleted'
+) {
+
+    echo '
+    <div style="
+        background:#7f1d1d;
+        border:1px solid #ef4444;
+        padding:15px 20px;
+        border-radius:12px;
+        margin-bottom:20px;
+    ">
+        🗑️ Data gudang berhasil dihapus.
+    </div>
+    ';
+}
+
+?>
+
+
+<!-- =======================================================
+     STATISTIK
+======================================================== -->
+
+<div class="stats">
+
+    <div class="stat">
+
+        <div class="stat-title">
+            TOTAL GUDANG
+        </div>
+
+        <div class="stat-number">
+            <?= number_format($totalGudang) ?>
+        </div>
+
+    </div>
+
+
+    <div class="stat">
+
+        <div class="stat-title">
+            STOK
+        </div>
+
+        <div class="stat-number">
+            <?= number_format($stats['stok']) ?>
+        </div>
+
+    </div>
+
+
+    <div class="stat">
+
+        <div class="stat-title">
+            SIAP PAKAI
+        </div>
+
+        <div class="stat-number">
+            <?= number_format($stats['siap_pakai']) ?>
+        </div>
+
+    </div>
+
+
+    <div class="stat">
+
+        <div class="stat-title">
+            PERBAIKAN
+        </div>
+
+        <div class="stat-number">
+            <?= number_format($stats['perbaikan']) ?>
+        </div>
+
+    </div>
+
+
+    <div class="stat">
+
+        <div class="stat-title">
+            RUSAK
+        </div>
+
+        <div class="stat-number">
+            <?= number_format($stats['rusak']) ?>
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =======================================================
+     FILTER
+======================================================== -->
+
+<div class="filter">
+
+    <form method="GET">
+
+        <input
+            type="text"
+            name="search"
+            placeholder="Cari ID, PC, user, ruangan, printer..."
+            value="<?= esc($search) ?>"
+        >
+
+
+        <select name="status">
+
+            <option value="">
+                Semua Status
+            </option>
+
+            <option
+                value="Stok"
+                <?= $statusFilter === 'Stok' ? 'selected' : '' ?>
+            >
+                Stok
+            </option>
+
+            <option
+                value="Siap Pakai"
+                <?= $statusFilter === 'Siap Pakai' ? 'selected' : '' ?>
+            >
+                Siap Pakai
+            </option>
+
+            <option
+                value="Perbaikan"
+                <?= $statusFilter === 'Perbaikan' ? 'selected' : '' ?>
+            >
+                Perbaikan
+            </option>
+
+            <option
+                value="Rusak"
+                <?= $statusFilter === 'Rusak' ? 'selected' : '' ?>
+            >
+                Rusak
+            </option>
+
+        </select>
+
+
+        <select name="jenis">
+
+            <option value="">
+                Semua Jenis
+            </option>
+
+            <option
+                value="PC"
+                <?= $jenisFilter === 'PC' ? 'selected' : '' ?>
+            >
+                PC
+            </option>
+
+            <option
+                value="Printer 1"
+                <?= $jenisFilter === 'Printer 1' ? 'selected' : '' ?>
+            >
+                Printer 1
+            </option>
+
+            <option
+                value="Printer 2"
+                <?= $jenisFilter === 'Printer 2' ? 'selected' : '' ?>
+            >
+                Printer 2
+            </option>
+
+            <option
+                value="PC + Printer"
+                <?= $jenisFilter === 'PC + Printer' ? 'selected' : '' ?>
+            >
+                PC + Printer
+            </option>
+
+        </select>
+
+
+        <button
+            class="btn"
+            type="submit"
+        >
+            🔎 Cari / Filter
+        </button>
+
+    </form>
+
+</div>
+
+
+<!-- =======================================================
+     TABLE
+======================================================== -->
+
+<div class="table-box">
+
+<table>
+
+<thead>
+
+<tr>
+
+    <th>ID</th>
+
+    <th>Jenis</th>
+
+    <th>PC</th>
+
+    <th>User</th>
+
+    <th>Printer 1</th>
+
+    <th>Printer 2</th>
+
+    <th>Lokasi</th>
+
+    <th>Status</th>
+
+    <th>Tahun</th>
+
+    <th>Aksi</th>
+
+</tr>
+
+</thead>
+
+
+<tbody>
+
+<?php if (empty($gudangData)): ?>
+
+<tr>
+
+    <td
+        colspan="10"
+        style="
+            text-align:center;
+            padding:50px;
+            color:#64748b;
+        "
+    >
+
+        Tidak ada data gudang.
+
+    </td>
+
+</tr>
+
+<?php else: ?>
+
+
+<?php foreach ($gudangData as $row): ?>
+
+
+<tr>
+
+
+<!-- ID -->
+
+<td>
+
+    <b>
+        <?= esc($row['id'] ?? '') ?>
+    </b>
+
+</td>
+
+
+<!-- JENIS -->
+
+<td>
+
+<?php
+
+$jenis =
+    $row['jenis_barang'];
+
+$badgeClass =
+    'badge-blue';
+
+
+if (
+    $jenis === 'PC + Printer'
+) {
+
+    $badgeClass =
+        'badge-green';
+
+} elseif (
+    $jenis === 'Printer 1' ||
+    $jenis === 'Printer 2'
+) {
+
+    $badgeClass =
+        'badge-orange';
+}
+
+?>
+
+<span class="badge <?= $badgeClass ?>">
+
+    <?= esc($jenis) ?>
+
+</span>
+
+</td>
+
+
+<!-- PC -->
+
+<td>
+
+    <?= esc(
+        $row['nama_pc'] ?? '-'
+    ) ?>
+
+</td>
+
+
+<!-- USER -->
+
+<td>
+
+    <?= esc(
+        $row['nama_user'] ?? '-'
+    ) ?>
+
+</td>
+
+
+<!-- PRINTER 1 -->
+
+<td>
+
+    <?= esc(
+        $row['printer_1'] ?? '-'
+    ) ?>
+
+</td>
+
+
+<!-- PRINTER 2 -->
+
+<td>
+
+    <?= esc(
+        $row['printer_2'] ?? '-'
+    ) ?>
+
+</td>
+
+
+<!-- LOKASI -->
+
+<td>
+
+    <?= esc(
+        $row['gedung'] ?? ''
+    ) ?>
+
+    <br>
+
+    Lantai:
+    <?= esc(
+        $row['lantai'] ?? ''
+    ) ?>
+
+    <br>
+
+    Ruang:
+    <?= esc(
+        $row['ruangan'] ?? ''
+    ) ?>
+
+</td>
+
+
+<!-- STATUS -->
+
+<td>
+
+<?php
+
+$status =
+    $row['status_gudang']
+    ?? 'Stok';
+
+
+$statusClass =
+    'badge-blue';
+
+
+if (
+    $status === 'Siap Pakai'
+) {
+
+    $statusClass =
+        'badge-green';
+
+} elseif (
+    $status === 'Perbaikan'
+) {
+
+    $statusClass =
+        'badge-orange';
+
+} elseif (
+    $status === 'Rusak'
+) {
+
+    $statusClass =
+        'badge-red';
+}
+
+?>
+
+<span class="badge <?= $statusClass ?>">
+
+    <?= esc($status) ?>
+
+</span>
+
+</td>
+
+
+<!-- TAHUN -->
+
+<td>
+
+    <?= esc(
+        $row['tahun_pengadaan'] ?? '-'
+    ) ?>
+
+</td>
+
+
+<!-- AKSI -->
+
+<td>
+
+<div class="actions">
+
+
+<!-- DETAIL -->
+
+<button
+    class="btn-gray"
+    type="button"
+    onclick='showDetail(
+        <?= json_encode(
+            $row,
+            JSON_HEX_TAG |
+            JSON_HEX_APOS |
+            JSON_HEX_QUOT |
+            JSON_HEX_AMP
+        ) ?>
+    )'
+>
+    👁 Detail
+</button>
+
+
+<!-- KIRIM -->
+
+<button
+    class="btn-green"
+    type="button"
+    onclick='openKirimModal(
+        <?= json_encode(
+            $row,
+            JSON_HEX_TAG |
+            JSON_HEX_APOS |
+            JSON_HEX_QUOT |
+            JSON_HEX_AMP
+        ) ?>
+    )'
+>
+    📤 Kirim
+</button>
+
+
+<!-- STATUS -->
+
+<button
+    class="btn-orange"
+    type="button"
+    onclick="openStatusModal(
+        <?= (int)$row['id'] ?>,
+        '<?= esc($status) ?>'
+    )"
+>
+    ⚙ Status
+</button>
+
+
+<!-- RESTORE -->
+
+<form
+    method="POST"
+    onsubmit="
+        return confirm(
+            'Restore data ini ke inventaris Kartika 2?'
+        );
+    "
+>
+
+    <input
+        type="hidden"
+        name="id"
+        value="<?= (int)$row['id'] ?>"
+    >
+
+    <button
+        type="submit"
+        class="btn"
+        name="restore_gudang"
+    >
+        ♻ Restore
+    </button>
+
+</form>
+
+
+<!-- HAPUS -->
+
+<form
+    method="POST"
+    onsubmit="
+        return confirm(
+            'Yakin ingin menghapus data gudang ini?'
+        );
+    "
+>
+
+    <input
+        type="hidden"
+        name="id"
+        value="<?= (int)$row['id'] ?>"
+    >
+
+    <button
+        type="submit"
+        class="btn-red"
+        name="hapus_gudang"
+    >
+        🗑 Hapus
+    </button>
+
+</form>
+
+
+</div>
+
+</td>
+
+
+</tr>
+
+
+<?php endforeach; ?>
+
+
+<?php endif; ?>
+
+</tbody>
+
+</table>
+
+</div>
+
+
+</div>
+
+
+<!-- =========================================================
+     MODAL KIRIM
+========================================================= -->
+
+<div
+    class="modal"
+    id="modalKirim"
+>
+
+<div class="modal-content">
+
+
+<div class="modal-header">
+
+    <h2>
+        📤 Kirim Barang
+    </h2>
+
+    <span
+        class="close"
+        onclick="closeModal('modalKirim')"
+    >
+        &times;
+    </span>
+
+</div>
+
+
+<form
+    method="POST"
+    id="formKirim"
+>
+
+
+<input
+    type="hidden"
+    name="kirim_ruangan"
+    value="1"
+>
+
+
+<input
+    type="hidden"
+    name="id"
+    id="kirim_id"
+>
+
+
+<!-- =====================================================
+     KOMPONEN
+====================================================== -->
+
+<div class="form-group">
+
+    <label>
+        Pilih Barang yang Akan Dikirim
+    </label>
+
+
+    <div class="component-grid">
+
+
+        <div class="component-option">
+
+            <input
+                type="radio"
+                name="tipe_kirim"
+                value="pc"
+                id="kirim_pc"
+            >
+
+            <label for="kirim_pc">
+                💻 PC
+            </label>
+
+        </div>
+
+
+        <div class="component-option">
+
+            <input
+                type="radio"
+                name="tipe_kirim"
+                value="printer1"
+                id="kirim_printer1"
+            >
+
+            <label for="kirim_printer1">
+                🖨 Printer 1
+            </label>
+
+        </div>
+
+
+        <div class="component-option">
+
+            <input
+                type="radio"
+                name="tipe_kirim"
+                value="printer2"
+                id="kirim_printer2"
+            >
+
+            <label for="kirim_printer2">
+                🖨 Printer 2
+            </label>
+
+        </div>
+
+
+        <div class="component-option">
+
+            <input
+                type="radio"
+                name="tipe_kirim"
+                value="semua"
+                id="kirim_semua"
+            >
+
+            <label for="kirim_semua">
+                💻 + 🖨 Semua
+            </label>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     TUJUAN
+====================================================== -->
+
+<div class="form-group">
+
+    <label>
+        Pilih Tujuan Pengiriman
+    </label>
+
+
+    <div class="destination-grid">
+
+
+        <div class="destination-option">
+
+            <input
+                type="radio"
+                name="tujuan_kirim"
+                value="kartika1"
+                id="tujuan_kartika1"
+            >
+
+            <label for="tujuan_kartika1">
+                🏥 Kartika 1
+            </label>
+
+        </div>
+
+
+        <div class="destination-option">
+
+            <input
+                type="radio"
+                name="tujuan_kirim"
+                value="kartika2"
+                id="tujuan_kartika2"
+            >
+
+            <label for="tujuan_kartika2">
+                🏥 Kartika 2
+            </label>
+
+        </div>
+
+
+        <div class="destination-option">
+
+            <input
+                type="radio"
+                name="tujuan_kirim"
+                value="kartika3"
+                id="tujuan_kartika3"
+            >
+
+            <label for="tujuan_kartika3">
+                🏥 Kartika 3
+            </label>
+
+        </div>
+
+
+        <div class="destination-option">
+
+            <input
+                type="radio"
+                name="tujuan_kirim"
+                value="cicu"
+                id="tujuan_cicu"
+            >
+
+            <label for="tujuan_cicu">
+                🏥 CICU
+            </label>
+
+        </div>
+
+
+        <div class="destination-option">
+
+            <input
+                type="radio"
+                name="tujuan_kirim"
+                value="cvc"
+                id="tujuan_cvc"
+            >
+
+            <label for="tujuan_cvc">
+                🏥 CVC
+            </label>
+
+        </div>
+
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     DATA BARANG
+====================================================== -->
+
+<div
+    id="previewKirim"
+    style="
+        background:#020617;
+        border:1px solid #334155;
+        border-radius:12px;
+        padding:15px;
+        margin-bottom:20px;
+    "
+>
+
+    Pilih barang terlebih dahulu.
+
+</div>
+
+
+<!-- =====================================================
+     LOKASI TUJUAN
+====================================================== -->
+
+<div class="form-grid">
+
+
+    <div class="form-group">
+
+        <label>
+            Gedung Tujuan *
+        </label>
+
+        <input
+            type="text"
+            name="gedung_tujuan"
+            required
+            placeholder="Contoh: Paviliun Kartika"
+        >
+
+    </div>
+
+
+    <div class="form-group">
+
+        <label>
+            Lantai Tujuan *
+        </label>
+
+        <input
+            type="text"
+            name="lantai_tujuan"
+            required
+            placeholder="Contoh: 2"
+        >
+
+    </div>
+
+
+    <div class="form-group">
+
+        <label>
+            Ruangan Tujuan *
+        </label>
+
+        <input
+            type="text"
+            name="ruangan_tujuan"
+            required
+            placeholder="Contoh: Ruang 205"
+        >
+
+    </div>
+
+
+    <div class="form-group">
+
+        <label>
+            Nama User Tujuan
+        </label>
+
+        <input
+            type="text"
+            name="nama_user_tujuan"
+            placeholder="Nama pengguna"
+        >
+
+    </div>
+
+
+    <div class="form-group full">
+
+        <label>
+            Catatan
+        </label>
+
+        <textarea
+            name="catatan_kirim"
+            rows="3"
+            placeholder="Catatan pengiriman..."
+        ></textarea>
+
+    </div>
+
+
+</div>
+
+
+<!-- =====================================================
+     FOOTER
+====================================================== -->
+
+<div class="modal-footer">
+
+    <button
+        type="button"
+        class="btn-gray"
+        onclick="closeModal('modalKirim')"
+    >
+        Batal
+    </button>
+
+
+    <button
+        type="submit"
+        class="btn-green"
+        onclick="
+            return validateKirim();
+        "
+    >
+        📤 Kirim Barang
+    </button>
+
+</div>
+
+
+</form>
+
+</div>
+
+</div>
+
+
+<!-- =========================================================
+     MODAL STATUS
+========================================================= -->
+
+<div
+    class="modal"
+    id="modalStatus"
+>
+
+<div class="modal-content">
+
+
+<div class="modal-header">
+
+    <h2>
+        ⚙ Ubah Status Gudang
+    </h2>
+
+    <span
+        class="close"
+        onclick="closeModal('modalStatus')"
+    >
+        &times;
+    </span>
+
+</div>
+
+
+<form method="POST">
+
+
+<input
+    type="hidden"
+    name="update_status"
+    value="1"
+>
+
+
+<input
+    type="hidden"
+    name="id"
+    id="status_id"
+>
+
+
+<div class="form-group">
+
+    <label>
+        Status
+    </label>
+
+
+    <select
+        name="status_gudang"
+        id="status_value"
+    >
+
+        <option value="Stok">
+            Stok
+        </option>
+
+        <option value="Siap Pakai">
+            Siap Pakai
+        </option>
+
+        <option value="Perbaikan">
+            Perbaikan
+        </option>
+
+        <option value="Rusak">
+            Rusak
+        </option>
+
+    </select>
+
+</div>
+
+
+<div class="modal-footer">
+
+    <button
+        type="button"
+        class="btn-gray"
+        onclick="closeModal('modalStatus')"
+    >
+        Batal
+    </button>
+
+
+    <button
+        type="submit"
+        class="btn"
+    >
+        💾 Simpan Status
+    </button>
+
+</div>
+
+
+</form>
+
+</div>
+
+</div>
+
+
+<!-- =========================================================
+     MODAL DETAIL
+========================================================= -->
+
+<div
+    class="modal"
+    id="modalDetail"
+>
+
+<div class="modal-content">
+
+
+<div class="modal-header">
+
+    <h2>
+        👁 Detail Barang
+    </h2>
+
+    <span
+        class="close"
+        onclick="closeModal('modalDetail')"
+    >
+        &times;
+    </span>
+
+</div>
+
+
+<div
+    class="detail-grid"
+    id="detailContent"
+>
+</div>
+
+
+<div class="modal-footer">
+
+    <button
+        type="button"
+        class="btn-gray"
+        onclick="closeModal('modalDetail')"
+    >
+        Tutup
+    </button>
+
+</div>
+
+
+</div>
+
+</div>
+
+
+<!-- =========================================================
+     JAVASCRIPT
+========================================================= -->
+
+<script>
+
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+function openModal(id)
+{
+    document.getElementById(id).style.display =
+        'block';
+}
+
+
+function closeModal(id)
+{
+    document.getElementById(id).style.display =
+        'none';
+}
+
+
+/* =========================================================
+   CLOSE KLIK LUAR
+========================================================= */
+
+window.addEventListener(
+    'click',
+    function(event)
+    {
+
+        document.querySelectorAll(
+            '.modal'
+        ).forEach(
+            function(modal)
+            {
+
+                if (
+                    event.target === modal
+                ) {
+
+                    modal.style.display =
+                        'none';
+                }
+
+            }
+        );
+
+    }
+);
+
+
+/* =========================================================
+   KIRIM MODAL
+========================================================= */
+
+function openKirimModal(row)
+{
+
+    document.getElementById(
+        'kirim_id'
+    ).value =
+        row.id || '';
+
+
+    /*
+     * Reset pilihan.
+     */
+
+    document.querySelectorAll(
+        '#modalKirim input[type="radio"]'
+    ).forEach(
+        function(el)
+        {
+            el.checked = false;
+            el.disabled = false;
+        }
+    );
+
+
+    /*
+     * Tentukan komponen yang tersedia.
+     */
+
+    var hasPC =
+        String(
+            row.nama_pc || ''
+        ).trim() !== '';
+
+
+    var hasPrinter1 =
+        String(
+            row.printer_1 || ''
+        ).trim() !== '';
+
+
+    var hasPrinter2 =
+        String(
+            row.printer_2 || ''
+        ).trim() !== '';
+
+
+    document.getElementById(
+        'kirim_pc'
+    ).disabled =
+        !hasPC;
+
+
+    document.getElementById(
+        'kirim_printer1'
+    ).disabled =
+        !hasPrinter1;
+
+
+    document.getElementById(
+        'kirim_printer2'
+    ).disabled =
+        !hasPrinter2;
+
+
+    document.getElementById(
+        'kirim_semua'
+    ).disabled =
+        !(
+            hasPC ||
+            hasPrinter1 ||
+            hasPrinter2
+        );
+
+
+    /*
+     * Preview.
+     */
+
+    var html = '';
+
+    html +=
+        '<b>ID Gudang:</b> ' +
+        escapeHtml(
+            row.id || ''
+        ) +
+        '<br>';
+
+
+    html +=
+        '<b>PC:</b> ' +
+        escapeHtml(
+            row.nama_pc || '-'
+        ) +
+        '<br>';
+
+
+    html +=
+        '<b>Printer 1:</b> ' +
+        escapeHtml(
+            row.printer_1 || '-'
+        ) +
+        '<br>';
+
+
+    html +=
+        '<b>Printer 2:</b> ' +
+        escapeHtml(
+            row.printer_2 || '-'
+        );
+
+
+    document.getElementById(
+        'previewKirim'
+    ).innerHTML =
+        html;
+
+
+    openModal(
+        'modalKirim'
+    );
+}
+
+
+/* =========================================================
+   VALIDASI KIRIM
+========================================================= */
+
+function validateKirim()
+{
+
+    var tipe =
+        document.querySelector(
+            'input[name="tipe_kirim"]:checked'
+        );
+
+
+    var tujuan =
+        document.querySelector(
+            'input[name="tujuan_kirim"]:checked'
+        );
+
+
+    if (!tipe) {
+
+        alert(
+            'Silakan pilih barang yang akan dikirim.'
+        );
+
+        return false;
+    }
+
+
+    if (!tujuan) {
+
+        alert(
+            'Silakan pilih tujuan pengiriman.'
+        );
+
+        return false;
+    }
+
+
+    var tujuanText =
+        tujuan
+            .nextElementSibling
+            .innerText
+            .trim();
+
+
+    var tipeText =
+        tipe
+            .nextElementSibling
+            .innerText
+            .trim();
+
+
+    return confirm(
+        'Kirim ' +
+        tipeText +
+        ' ke ' +
+        tujuanText +
+        '?'
+    );
+}
+
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+function openStatusModal(
+    id,
+    status
+)
+{
+
+    document.getElementById(
+        'status_id'
+    ).value =
+        id;
+
+
+    document.getElementById(
+        'status_value'
+    ).value =
+        status;
+
+
+    openModal(
+        'modalStatus'
+    );
+}
+
+
+/* =========================================================
+   DETAIL
+========================================================= */
+
+function showDetail(row)
+{
+
+    var fields = [
+
+        ['ID', row.id],
+
+        ['ID Asal', row.id_asal],
+
+        ['Jenis Barang', row.jenis_barang],
+
+        ['Nama PC', row.nama_pc],
+
+        ['Nama User', row.nama_user],
+
+        ['Manufactur', row.manufactur],
+
+        ['Processor', row.processor_type],
+
+        ['Windows', row.windows_version],
+
+        ['RAM', row.ram_size],
+
+        ['Harddisk', row.ram_hardisk],
+
+        ['Monitor', row.monitor_model],
+
+        ['Ukuran Monitor', row.monitor_size],
+
+        ['VGA Monitor', row.monitor_vga],
+
+        ['Printer 1', row.printer_1],
+
+        ['Printer 2', row.printer_2],
+
+        ['Gedung', row.gedung],
+
+        ['Lantai', row.lantai],
+
+        ['Ruangan', row.ruangan],
+
+        ['Tahun Pengadaan', row.tahun_pengadaan],
+
+        ['Status Gudang', row.status_gudang],
+
+        ['Alasan Ganti', row.alasan_ganti]
+
+    ];
+
+
+    var html = '';
+
+
+    fields.forEach(
+        function(item)
+        {
+
+            html +=
+
+                '<div class="detail-item">' +
+
+                    '<div class="detail-label">' +
+
+                        escapeHtml(
+                            item[0]
+                        ) +
+
+                    '</div>' +
+
+                    '<div class="detail-value">' +
+
+                        escapeHtml(
+                            item[1] || '-'
+                        ) +
+
+                    '</div>' +
+
+                '</div>';
+
+        }
+    );
+
+
+    document.getElementById(
+        'detailContent'
+    ).innerHTML =
+        html;
+
+
+    openModal(
+        'modalDetail'
+    );
+}
+
+
+/* =========================================================
+   ESCAPE HTML JAVASCRIPT
+========================================================= */
+
+function escapeHtml(value)
+{
+
+    var div =
+        document.createElement(
+            'div'
+        );
+
+
+    div.textContent =
+        value == null
+            ? ''
+            : String(value);
+
+
+    return div.innerHTML;
+}
+
+
+/* =========================================================
+   ESCAPE
+========================================================= */
+
+</script>
+
+
+</body>
+
+</html>

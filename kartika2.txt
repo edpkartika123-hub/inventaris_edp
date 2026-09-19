@@ -1,0 +1,1288 @@
+<?php
+/**
+ * Kartika 2 - Data Inventaris Hardware & PC EDP
+ * Modern Digital Responsive Design
+ * Update: Kolom dipisah + Tombol Edit + Ganti (ke Gudang) + Disposal
+ */
+
+include 'koneksi.php';
+
+// ===== PROSES SIMPAN DATA BARU =====
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id']) && !isset($_POST['ganti_id']) && !isset($_POST['disposal_id'])) {
+    $gedung = mysqli_real_escape_string($conn, $_POST['gedung']);
+    $lantai = mysqli_real_escape_string($conn, $_POST['lantai']);
+    $ruangan = mysqli_real_escape_string($conn, $_POST['ruangan']);
+    $nama_pc = mysqli_real_escape_string($conn, $_POST['nama_pc']);
+    $nama_user = mysqli_real_escape_string($conn, $_POST['nama_user']);
+    $manufactur = mysqli_real_escape_string($conn, $_POST['manufactur']);
+    $processor_type = mysqli_real_escape_string($conn, $_POST['processor_type']);
+    $windows_version = mysqli_real_escape_string($conn, $_POST['windows_version']);
+    $ram_size = mysqli_real_escape_string($conn, $_POST['ram_size']);
+    $ram_hardisk = mysqli_real_escape_string($conn, $_POST['ram_hardisk']);
+    $monitor_model = mysqli_real_escape_string($conn, $_POST['monitor_model']);
+    $monitor_size = mysqli_real_escape_string($conn, $_POST['monitor_size']);
+    $monitor_vga = mysqli_real_escape_string($conn, $_POST['monitor_vga']);
+    $printer_1 = mysqli_real_escape_string($conn, $_POST['printer_1']);
+    $printer_2 = mysqli_real_escape_string($conn, $_POST['printer_2']);
+    $tahun_pengadaan = mysqli_real_escape_string($conn, $_POST['tahun_pengadaan']);
+    $id_personil_edp = mysqli_real_escape_string($conn, $_POST['id_personil_edp']);
+
+    $sql = "INSERT INTO inventaris_kartika2 (gedung, lantai, ruangan, nama_pc, nama_user, manufactur, processor_type, windows_version, ram_size, ram_hardisk, monitor_model, monitor_size, monitor_vga, printer_1, printer_2, tahun_pengadaan, id_personil_edp) VALUES ('$gedung', '$lantai', '$ruangan', '$nama_pc', '$nama_user', '$manufactur', '$processor_type', '$windows_version', '$ram_size', '$ram_hardisk', '$monitor_model', '$monitor_size', '$monitor_vga', '$printer_1', '$printer_2', '$tahun_pengadaan', '$id_personil_edp')";
+    mysqli_query($conn, $sql);
+    header('Location: kartika2.php'); exit;
+}
+
+// ===== PROSES UPDATE DATA (EDIT) =====
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_id'])) {
+    $id = intval($_POST['edit_id']);
+    $gedung = mysqli_real_escape_string($conn, $_POST['gedung']);
+    $lantai = mysqli_real_escape_string($conn, $_POST['lantai']);
+    $ruangan = mysqli_real_escape_string($conn, $_POST['ruangan']);
+    $nama_pc = mysqli_real_escape_string($conn, $_POST['nama_pc']);
+    $nama_user = mysqli_real_escape_string($conn, $_POST['nama_user']);
+    $manufactur = mysqli_real_escape_string($conn, $_POST['manufactur']);
+    $processor_type = mysqli_real_escape_string($conn, $_POST['processor_type']);
+    $windows_version = mysqli_real_escape_string($conn, $_POST['windows_version']);
+    $ram_size = mysqli_real_escape_string($conn, $_POST['ram_size']);
+    $ram_hardisk = mysqli_real_escape_string($conn, $_POST['ram_hardisk']);
+    $monitor_model = mysqli_real_escape_string($conn, $_POST['monitor_model']);
+    $monitor_size = mysqli_real_escape_string($conn, $_POST['monitor_size']);
+    $monitor_vga = mysqli_real_escape_string($conn, $_POST['monitor_vga']);
+    $printer_1 = mysqli_real_escape_string($conn, $_POST['printer_1']);
+    $printer_2 = mysqli_real_escape_string($conn, $_POST['printer_2']);
+    $tahun_pengadaan = mysqli_real_escape_string($conn, $_POST['tahun_pengadaan']);
+    $id_personil_edp = mysqli_real_escape_string($conn, $_POST['id_personil_edp']);
+
+    $sql = "UPDATE inventaris_kartika2 SET gedung='$gedung', lantai='$lantai', ruangan='$ruangan', nama_pc='$nama_pc', nama_user='$nama_user', manufactur='$manufactur', processor_type='$processor_type', windows_version='$windows_version', ram_size='$ram_size', ram_hardisk='$ram_hardisk', monitor_model='$monitor_model', monitor_size='$monitor_size', monitor_vga='$monitor_vga', printer_1='$printer_1', printer_2='$printer_2', tahun_pengadaan='$tahun_pengadaan', id_personil_edp='$id_personil_edp' WHERE id=$id";
+    mysqli_query($conn, $sql);
+    header('Location: kartika2.php'); exit;
+}
+
+// ===== PROSES GANTI (PINDAH BARANG KE GUDANG) =====
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ganti_id'])) {
+
+    $id            = intval($_POST['ganti_id']);
+    $alasan        = mysqli_real_escape_string($conn, $_POST['alasan_ganti'] ?? '');
+    $status_gudang = mysqli_real_escape_string($conn, $_POST['status_gudang'] ?? 'Stok');
+    $tipe_ganti    = $_POST['tipe_ganti'] ?? '';
+
+    // Validasi
+    $tipe_valid = ['pc', 'printer1', 'printer2', 'semua'];
+
+    if (!in_array($tipe_ganti, $tipe_valid, true)) {
+        die('Jenis barang yang dipilih tidak valid.');
+    }
+
+    if (empty($alasan)) {
+        die('Alasan penggantian wajib diisi.');
+    }
+
+    // Ambil data inventaris
+    $query_data = mysqli_query(
+        $conn,
+        "SELECT * FROM inventaris_kartika2 WHERE id = $id LIMIT 1"
+    );
+
+    $data = mysqli_fetch_assoc($query_data);
+
+    if (!$data) {
+        die('Data inventaris tidak ditemukan.');
+    }
+
+    // Escape semua data dasar
+    $gedung          = mysqli_real_escape_string($conn, $data['gedung'] ?? '');
+    $lantai          = mysqli_real_escape_string($conn, $data['lantai'] ?? '');
+    $ruangan         = mysqli_real_escape_string($conn, $data['ruangan'] ?? '');
+    $tahun_pengadaan = mysqli_real_escape_string($conn, $data['tahun_pengadaan'] ?? '');
+    $id_personil_edp = mysqli_real_escape_string($conn, $data['id_personil_edp'] ?? '');
+
+    /*
+    |--------------------------------------------------------------------------
+    | TRANSACTION
+    |--------------------------------------------------------------------------
+    | Supaya kalau INSERT ke gudang gagal, data inventaris tidak ikut berubah.
+    |--------------------------------------------------------------------------
+    */
+
+    mysqli_begin_transaction($conn);
+
+    try {
+
+        // ==========================================================
+        // 1. PINDAH PC SAJA
+        // ==========================================================
+        if ($tipe_ganti === 'pc') {
+
+            // Pastikan PC memang ada
+            if (trim($data['nama_pc'] ?? '') === '') {
+                throw new Exception('Data PC kosong. Tidak ada PC yang dapat dipindahkan.');
+            }
+
+            $nama_pc         = mysqli_real_escape_string($conn, $data['nama_pc'] ?? '');
+            $nama_user       = mysqli_real_escape_string($conn, $data['nama_user'] ?? '');
+            $manufactur      = mysqli_real_escape_string($conn, $data['manufactur'] ?? '');
+            $processor_type  = mysqli_real_escape_string($conn, $data['processor_type'] ?? '');
+            $windows_version = mysqli_real_escape_string($conn, $data['windows_version'] ?? '');
+            $ram_size        = mysqli_real_escape_string($conn, $data['ram_size'] ?? '');
+            $ram_hardisk     = mysqli_real_escape_string($conn, $data['ram_hardisk'] ?? '');
+            $monitor_model   = mysqli_real_escape_string($conn, $data['monitor_model'] ?? '');
+            $monitor_size    = mysqli_real_escape_string($conn, $data['monitor_size'] ?? '');
+            $monitor_vga     = mysqli_real_escape_string($conn, $data['monitor_vga'] ?? '');
+
+            // Printer sengaja dikosongkan karena yang dipindahkan hanya PC
+            $printer_1 = '';
+            $printer_2 = '';
+
+            $sql_gudang = "
+                INSERT INTO gudang_kartika2 (
+                    id_asal,
+                    gedung,
+                    lantai,
+                    ruangan,
+                    nama_pc,
+                    nama_user,
+                    manufactur,
+                    processor_type,
+                    windows_version,
+                    ram_size,
+                    ram_hardisk,
+                    monitor_model,
+                    monitor_size,
+                    monitor_vga,
+                    printer_1,
+                    printer_2,
+                    tahun_pengadaan,
+                    id_personil_edp,
+                    alasan_ganti,
+                    status_gudang
+                ) VALUES (
+                    $id,
+                    '$gedung',
+                    '$lantai',
+                    '$ruangan',
+                    '$nama_pc',
+                    '$nama_user',
+                    '$manufactur',
+                    '$processor_type',
+                    '$windows_version',
+                    '$ram_size',
+                    '$ram_hardisk',
+                    '$monitor_model',
+                    '$monitor_size',
+                    '$monitor_vga',
+                    '',
+                    '',
+                    '$tahun_pengadaan',
+                    '$id_personil_edp',
+                    '$alasan',
+                    '$status_gudang'
+                )
+            ";
+
+            if (!mysqli_query($conn, $sql_gudang)) {
+                throw new Exception('Gagal memindahkan PC ke gudang: ' . mysqli_error($conn));
+            }
+
+            // Hanya PC + spesifikasinya yang dihapus dari inventaris
+            $sql_update = "
+                UPDATE inventaris_kartika2 SET
+                    nama_pc = '',
+                    nama_user = '',
+                    manufactur = '',
+                    processor_type = '',
+                    windows_version = '',
+                    ram_size = '',
+                    ram_hardisk = '',
+                    monitor_model = '',
+                    monitor_size = '',
+                    monitor_vga = '',
+                    tahun_pengadaan = '',
+                    id_personil_edp = ''
+                WHERE id = $id
+            ";
+
+            if (!mysqli_query($conn, $sql_update)) {
+                throw new Exception('Gagal menghapus PC dari inventaris: ' . mysqli_error($conn));
+            }
+        }
+
+
+        // ==========================================================
+        // 2. PINDAH PRINTER 1 SAJA
+        // ==========================================================
+        elseif ($tipe_ganti === 'printer1') {
+
+            // Pastikan Printer 1 memang ada
+            if (trim($data['printer_1'] ?? '') === '') {
+                throw new Exception('Printer 1 kosong. Tidak ada Printer 1 yang dapat dipindahkan.');
+            }
+
+            $printer_1 = mysqli_real_escape_string($conn, $data['printer_1']);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Hanya printer_1 yang diisi.
+            | PC, monitor dan printer_2 dibuat kosong di gudang.
+            |--------------------------------------------------------------------------
+            */
+
+            $sql_gudang = "
+                INSERT INTO gudang_kartika2 (
+                    id_asal,
+                    gedung,
+                    lantai,
+                    ruangan,
+                    nama_pc,
+                    nama_user,
+                    manufactur,
+                    processor_type,
+                    windows_version,
+                    ram_size,
+                    ram_hardisk,
+                    monitor_model,
+                    monitor_size,
+                    monitor_vga,
+                    printer_1,
+                    printer_2,
+                    tahun_pengadaan,
+                    id_personil_edp,
+                    alasan_ganti,
+                    status_gudang
+                ) VALUES (
+                    $id,
+                    '$gedung',
+                    '$lantai',
+                    '$ruangan',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '$printer_1',
+                    '',
+                    '',
+                    '',
+                    '$alasan',
+                    '$status_gudang'
+                )
+            ";
+
+            if (!mysqli_query($conn, $sql_gudang)) {
+                throw new Exception('Gagal memindahkan Printer 1 ke gudang: ' . mysqli_error($conn));
+            }
+
+            // Hanya Printer 1 yang dihapus dari inventaris
+            $sql_update = "
+                UPDATE inventaris_kartika2
+                SET printer_1 = ''
+                WHERE id = $id
+            ";
+
+            if (!mysqli_query($conn, $sql_update)) {
+                throw new Exception('Gagal menghapus Printer 1 dari inventaris: ' . mysqli_error($conn));
+            }
+        }
+
+
+        // ==========================================================
+        // 3. PINDAH PRINTER 2 SAJA
+        // ==========================================================
+        elseif ($tipe_ganti === 'printer2') {
+
+            // Pastikan Printer 2 memang ada
+            if (trim($data['printer_2'] ?? '') === '') {
+                throw new Exception('Printer 2 kosong. Tidak ada Printer 2 yang dapat dipindahkan.');
+            }
+
+            $printer_2 = mysqli_real_escape_string($conn, $data['printer_2']);
+
+            $sql_gudang = "
+                INSERT INTO gudang_kartika2 (
+                    id_asal,
+                    gedung,
+                    lantai,
+                    ruangan,
+                    nama_pc,
+                    nama_user,
+                    manufactur,
+                    processor_type,
+                    windows_version,
+                    ram_size,
+                    ram_hardisk,
+                    monitor_model,
+                    monitor_size,
+                    monitor_vga,
+                    printer_1,
+                    printer_2,
+                    tahun_pengadaan,
+                    id_personil_edp,
+                    alasan_ganti,
+                    status_gudang
+                ) VALUES (
+                    $id,
+                    '$gedung',
+                    '$lantai',
+                    '$ruangan',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '$printer_2',
+                    '',
+                    '',
+                    '$alasan',
+                    '$status_gudang'
+                )
+            ";
+
+            if (!mysqli_query($conn, $sql_gudang)) {
+                throw new Exception('Gagal memindahkan Printer 2 ke gudang: ' . mysqli_error($conn));
+            }
+
+            // Hanya Printer 2 yang dihapus
+            $sql_update = "
+                UPDATE inventaris_kartika2
+                SET printer_2 = ''
+                WHERE id = $id
+            ";
+
+            if (!mysqli_query($conn, $sql_update)) {
+                throw new Exception('Gagal menghapus Printer 2 dari inventaris: ' . mysqli_error($conn));
+            }
+        }
+
+
+        // ==========================================================
+        // 4. PINDAH SEMUA
+        // ==========================================================
+        elseif ($tipe_ganti === 'semua') {
+
+            /*
+            |--------------------------------------------------------------------------
+            | Semua barang dipindahkan.
+            | Jadi seluruh data asli dimasukkan ke gudang.
+            |--------------------------------------------------------------------------
+            */
+
+            $fields = [
+                'nama_pc',
+                'nama_user',
+                'manufactur',
+                'processor_type',
+                'windows_version',
+                'ram_size',
+                'ram_hardisk',
+                'monitor_model',
+                'monitor_size',
+                'monitor_vga',
+                'printer_1',
+                'printer_2'
+            ];
+
+            $escaped = [];
+
+            foreach ($fields as $field) {
+                $escaped[$field] = mysqli_real_escape_string(
+                    $conn,
+                    $data[$field] ?? ''
+                );
+            }
+
+            $sql_gudang = "
+                INSERT INTO gudang_kartika2 (
+                    id_asal,
+                    gedung,
+                    lantai,
+                    ruangan,
+                    nama_pc,
+                    nama_user,
+                    manufactur,
+                    processor_type,
+                    windows_version,
+                    ram_size,
+                    ram_hardisk,
+                    monitor_model,
+                    monitor_size,
+                    monitor_vga,
+                    printer_1,
+                    printer_2,
+                    tahun_pengadaan,
+                    id_personil_edp,
+                    alasan_ganti,
+                    status_gudang
+                ) VALUES (
+                    $id,
+                    '$gedung',
+                    '$lantai',
+                    '$ruangan',
+                    '{$escaped['nama_pc']}',
+                    '{$escaped['nama_user']}',
+                    '{$escaped['manufactur']}',
+                    '{$escaped['processor_type']}',
+                    '{$escaped['windows_version']}',
+                    '{$escaped['ram_size']}',
+                    '{$escaped['ram_hardisk']}',
+                    '{$escaped['monitor_model']}',
+                    '{$escaped['monitor_size']}',
+                    '{$escaped['monitor_vga']}',
+                    '{$escaped['printer_1']}',
+                    '{$escaped['printer_2']}',
+                    '$tahun_pengadaan',
+                    '$id_personil_edp',
+                    '$alasan',
+                    '$status_gudang'
+                )
+            ";
+
+            if (!mysqli_query($conn, $sql_gudang)) {
+                throw new Exception('Gagal memindahkan semua barang ke gudang: ' . mysqli_error($conn));
+            }
+
+            // Hapus seluruh record inventaris
+            $sql_delete = "
+                DELETE FROM inventaris_kartika2
+                WHERE id = $id
+            ";
+
+            if (!mysqli_query($conn, $sql_delete)) {
+                throw new Exception('Gagal menghapus data inventaris: ' . mysqli_error($conn));
+            }
+        }
+
+
+        // ==========================================================
+        // COMMIT
+        // ==========================================================
+
+        mysqli_commit($conn);
+
+        header('Location: kartika2.php?success=ganti');
+        exit;
+
+    } catch (Exception $e) {
+
+        // Batalkan semua perubahan jika ada kesalahan
+        mysqli_rollback($conn);
+
+        die(
+            '<div style="
+                font-family:Arial;
+                padding:30px;
+                background:#fee2e2;
+                color:#991b1b;
+                max-width:700px;
+                margin:50px auto;
+                border-radius:12px;
+            ">
+                <h3>Gagal Memindahkan Barang</h3>
+                <p>' . htmlspecialchars($e->getMessage()) . '</p>
+                <a href="kartika2.php">Kembali ke Kartika 2</a>
+            </div>'
+        );
+    }
+}
+// ===== PROSES HAPUS DATA =====
+if (isset($_GET['hapus'])) {
+    $id = intval($_GET['hapus']);
+    mysqli_query($conn, "DELETE FROM inventaris_kartika2 WHERE id=$id");
+    header('Location: kartika2.php'); exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kartika 2 - Inventaris Hardware & PC EDP</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1; --primary-dark: #4f46e5; --secondary: #ec4899;
+            --accent: #06b6d4; --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+            --dark: #0f172a; --dark-card: #1e293b; --light: #f8fafc;
+            --text-primary: #1e293b; --text-secondary: #64748b;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            --radius: 16px; --radius-lg: 24px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%);
+            background-attachment: fixed; min-height: 100vh;
+            color: var(--text-primary); overflow-x: hidden; -webkit-font-smoothing: antialiased;
+        }
+        .bg-particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: hidden; }
+        .particle { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.08); animation: float-particle linear infinite; }
+        .particle:nth-child(1) { width: 60px; height: 60px; left: 10%; top: 20%; animation-duration: 20s; }
+        .particle:nth-child(2) { width: 40px; height: 40px; left: 80%; top: 60%; animation-duration: 25s; animation-delay: -5s; }
+        .particle:nth-child(3) { width: 80px; height: 80px; left: 50%; top: 10%; animation-duration: 30s; animation-delay: -10s; }
+        .particle:nth-child(4) { width: 30px; height: 30px; left: 20%; top: 80%; animation-duration: 22s; animation-delay: -8s; }
+        .particle:nth-child(5) { width: 50px; height: 50px; left: 70%; top: 30%; animation-duration: 28s; animation-delay: -15s; }
+        @keyframes float-particle { 0%,100% { transform: translateY(0) rotate(0deg); opacity: 0.2; } 50% { transform: translateY(-100px) rotate(180deg); opacity: 0.5; } }
+        .glass-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.4); backdrop-filter: blur(1px); z-index: 0; }
+
+        /* Header */
+        .header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(255,255,255,0.08); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid rgba(255,255,255,0.1); padding: 0; transition: var(--transition); }
+        .header.scrolled { background: rgba(15,23,42,0.85); box-shadow: var(--shadow-lg); }
+        .header-inner { max-width: 1400px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .menu-btn { width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: var(--transition); backdrop-filter: blur(10px); }
+        .menu-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+        .logo { display: flex; align-items: center; gap: 12px; }
+        .logo-icon { width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(139,92,246,0.4); animation: pulse-glow 3s ease-in-out infinite; }
+        @keyframes pulse-glow { 0%,100% { box-shadow: 0 4px 15px rgba(139,92,246,0.4); } 50% { box-shadow: 0 4px 25px rgba(139,92,246,0.7); } }
+        .logo-icon i { color: white; font-size: 18px; }
+        .logo-text { font-size: 20px; font-weight: 700; color: white; letter-spacing: -0.5px; }
+        .logo-text span { font-weight: 300; opacity: 0.8; }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .header-btn { width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: var(--transition); position: relative; overflow: hidden; }
+        .header-btn::before { content: ''; position: absolute; top: 50%; left: 50%; width: 0; height: 0; background: rgba(255,255,255,0.2); border-radius: 50%; transform: translate(-50%,-50%); transition: width 0.4s, height 0.4s; }
+        .header-btn:hover::before { width: 100%; height: 100%; }
+        .header-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .header-btn i { position: relative; z-index: 1; }
+
+        /* Breadcrumb */
+        .breadcrumb-bar { position: relative; z-index: 1; padding-top: 90px; padding-bottom: 10px; }
+        .breadcrumb-inner { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+        .breadcrumb { display: flex; align-items: center; gap: 10px; font-size: 13px; color: rgba(255,255,255,0.6); flex-wrap: wrap; }
+        .breadcrumb a { color: rgba(255,255,255,0.8); text-decoration: none; transition: var(--transition); font-weight: 500; }
+        .breadcrumb a:hover { color: white; }
+        .breadcrumb i { font-size: 10px; color: rgba(255,255,255,0.4); }
+        .breadcrumb-current { color: white; font-weight: 600; }
+
+        /* Sidebar */
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); z-index: 2000; opacity: 0; visibility: hidden; transition: var(--transition); }
+        .sidebar-overlay.active { opacity: 1; visibility: visible; }
+        .sidebar { position: fixed; top: 0; left: -320px; width: 320px; height: 100%; background: linear-gradient(180deg, var(--dark) 0%, var(--dark-card) 100%); z-index: 2001; transition: left 0.4s cubic-bezier(0.4,0,0.2,1); overflow-y: auto; box-shadow: 10px 0 40px rgba(0,0,0,0.3); }
+        .sidebar.active { left: 0; }
+        .sidebar-header { padding: 30px 24px; background: linear-gradient(135deg, var(--primary), var(--secondary)); position: relative; overflow: hidden; }
+        .sidebar-header::before { content: ''; position: absolute; top: -50%; right: -50%; width: 100%; height: 100%; background: rgba(255,255,255,0.1); border-radius: 50%; }
+        .sidebar-close { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.2); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: var(--transition); }
+        .sidebar-close:hover { background: rgba(255,255,255,0.3); transform: rotate(90deg); }
+        .sidebar-user { display: flex; align-items: center; gap: 14px; position: relative; z-index: 1; }
+        .sidebar-avatar { width: 56px; height: 56px; border-radius: 16px; background: white; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .sidebar-user-info h3 { color: white; font-size: 16px; font-weight: 600; }
+        .sidebar-user-info p { color: rgba(255,255,255,0.7); font-size: 12px; margin-top: 2px; }
+        .sidebar-menu { padding: 20px 16px; }
+        .sidebar-section { margin-bottom: 24px; }
+        .sidebar-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; padding: 0 12px; margin-bottom: 8px; }
+        .sidebar-item { display: flex; align-items: center; gap: 14px; padding: 14px 12px; border-radius: 12px; color: #64748b; text-decoration: none; font-size: 14px; font-weight: 500; transition: var(--transition); margin-bottom: 4px; }
+        .sidebar-item:hover, .sidebar-item.active { background: rgba(139,92,246,0.15); color: #a78bfa; }
+        .sidebar-item i { width: 24px; text-align: center; font-size: 16px; }
+
+        /* Main Content */
+        .main-content { position: relative; z-index: 1; padding-bottom: 60px; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+
+        /* Page Header */
+        .page-header { margin-bottom: 32px; animation: fadeInUp 0.8s ease-out; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .page-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 50px; color: white; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+        .page-badge i { color: #fbbf24; }
+        .page-title { font-size: clamp(26px, 4vw, 38px); font-weight: 800; color: white; line-height: 1.2; margin-bottom: 10px; text-shadow: 0 2px 20px rgba(0,0,0,0.2); }
+        .page-title .gradient-text { background: linear-gradient(135deg, #a78bfa, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .page-subtitle { font-size: clamp(13px, 2vw, 15px); color: rgba(255,255,255,0.7); font-weight: 400; max-width: 600px; }
+
+        /* Glass Card */
+        .glass-card { background: rgba(255,255,255,0.08); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-lg); overflow: hidden; transition: var(--transition); margin-bottom: 28px; }
+        .glass-card:hover { border-color: rgba(255,255,255,0.25); }
+        .card-header-glass { padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .card-header-title { display: flex; align-items: center; gap: 12px; color: white; font-size: 16px; font-weight: 700; }
+        .card-header-title i { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #a78bfa, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 4px 15px rgba(139,92,246,0.3); }
+        .card-body-glass { padding: 24px; }
+
+        /* Form */
+        .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-input { width: 100%; padding: 12px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; color: white; font-size: 14px; font-family: 'Poppins', sans-serif; transition: var(--transition); outline: none; }
+        .form-input::placeholder { color: rgba(255,255,255,0.35); }
+        .form-input:focus { background: rgba(255,255,255,0.12); border-color: rgba(167,139,250,0.6); box-shadow: 0 0 0 3px rgba(167,139,250,0.15); }
+        select.form-input { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+        select.form-input option { background: #1e293b; color: white; }
+        textarea.form-input { min-height: 80px; resize: vertical; }
+
+        /* Button */
+        .btn-glass { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; font-family: 'Poppins', sans-serif; cursor: pointer; border: none; transition: var(--transition); text-decoration: none; }
+        .btn-primary-glass { background: linear-gradient(135deg, #a78bfa, #8b5cf6); color: white; box-shadow: 0 4px 15px rgba(139,92,246,0.3); }
+        .btn-primary-glass:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(139,92,246,0.5); }
+        .btn-success-glass { background: linear-gradient(135deg, #34d399, #10b981); color: white; box-shadow: 0 4px 15px rgba(16,185,129,0.3); }
+        .btn-success-glass:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(16,185,129,0.5); }
+        .btn-danger-glass { background: linear-gradient(135deg, #f87171, #ef4444); color: white; box-shadow: 0 4px 15px rgba(239,68,68,0.3); padding: 8px 14px; font-size: 12px; border-radius: 8px; }
+        .btn-danger-glass:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(239,68,68,0.5); }
+        .btn-warning-glass { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #1e293b; box-shadow: 0 4px 15px rgba(245,158,11,0.3); padding: 8px 14px; font-size: 12px; border-radius: 8px; text-decoration: none; }
+        .btn-warning-glass:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(245,158,11,0.5); }
+        .btn-info-glass { background: linear-gradient(135deg, #60a5fa, #3b82f6); color: white; box-shadow: 0 4px 15px rgba(59,130,246,0.3); padding: 8px 14px; font-size: 12px; border-radius: 8px; text-decoration: none; border: none; cursor: pointer; }
+        .btn-info-glass:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.5); }
+        .btn-back-glass { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px 18px; font-size: 13px; }
+        .btn-back-glass:hover { background: rgba(255,255,255,0.2); }
+        .btn-action-group { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+
+        /* Table */
+        .table-wrapper { overflow-x: auto; border-radius: 16px; }
+        .data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+        .data-table thead th { background: linear-gradient(135deg, rgba(139,92,246,0.3), rgba(124,58,237,0.3)); backdrop-filter: blur(10px); color: white; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 12px 8px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); white-space: nowrap; }
+        .data-table thead th:first-child { border-radius: 12px 0 0 0; }
+        .data-table thead th:last-child { border-radius: 0 12px 0 0; }
+        .data-table tbody tr { background: rgba(255,255,255,0.03); transition: var(--transition); }
+        .data-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.05); }
+        .data-table tbody tr:hover { background: rgba(139,92,246,0.08); }
+        .data-table tbody td { padding: 12px 8px; color: rgba(255,255,255,0.85); border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: top; text-align: center; }
+        .data-table tbody tr:last-child td:first-child { border-radius: 0 0 0 12px; }
+        .data-table tbody tr:last-child td:last-child { border-radius: 0 0 12px 0; }
+        .td-center { text-align: center; }
+        .td-small { font-size: 11px; color: rgba(255,255,255,0.5); }
+        .td-badge { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+        .badge-cyan { background: rgba(6,182,212,0.2); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
+        .badge-green { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+        .badge-purple { background: rgba(139,92,246,0.2); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
+        .badge-pink { background: rgba(236,72,153,0.2); color: #f472b6; border: 1px solid rgba(236,72,153,0.3); }
+        .badge-orange { background: rgba(249,115,22,0.2); color: #fb923c; border: 1px solid rgba(249,115,22,0.3); }
+        .badge-blue { background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+
+        /* Empty State */
+        .empty-state { text-align: center; padding: 50px 20px; }
+        .empty-state i { font-size: 48px; color: rgba(255,255,255,0.2); margin-bottom: 16px; }
+        .empty-state h4 { color: rgba(255,255,255,0.6); font-size: 16px; margin-bottom: 8px; }
+        .empty-state p { color: rgba(255,255,255,0.4); font-size: 13px; }
+
+        /* Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 3000; opacity: 0; visibility: hidden; transition: var(--transition); display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal-content { background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-lg); width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto; transform: translateY(30px) scale(0.95); transition: var(--transition-slow); box-shadow: var(--shadow-xl); }
+        .modal-overlay.active .modal-content { transform: translateY(0) scale(1); }
+        .modal-header { padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; }
+        .modal-header.ganti { background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(37,99,235,0.2)); }
+        .modal-header.disposal { background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.2)); }
+        .modal-header.edit { background: linear-gradient(135deg, rgba(6,182,212,0.2), rgba(139,92,246,0.2)); }
+        .modal-title { display: flex; align-items: center; gap: 12px; color: white; font-size: 18px; font-weight: 700; }
+        .modal-title i { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .modal-title i.icon-ganti { background: linear-gradient(135deg, #60a5fa, #3b82f6); box-shadow: 0 4px 15px rgba(59,130,246,0.3); }
+        .modal-title i.icon-disposal { background: linear-gradient(135deg, #f87171, #ef4444); box-shadow: 0 4px 15px rgba(239,68,68,0.3); }
+        .modal-title i.icon-edit { background: linear-gradient(135deg, #a78bfa, #8b5cf6); box-shadow: 0 4px 15px rgba(139,92,246,0.3); }
+        .modal-close { width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: var(--transition); }
+        .modal-close:hover { background: rgba(239,68,68,0.3); border-color: rgba(239,68,68,0.5); transform: rotate(90deg); }
+        .modal-body { padding: 24px; }
+        .modal-footer { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: flex-end; gap: 12px; }
+        .info-box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+        .info-box p { color: rgba(255,255,255,0.7); font-size: 13px; line-height: 1.6; margin: 0; }
+        .info-box strong { color: white; }
+
+        /* Footer */
+        .footer { position: relative; z-index: 1; text-align: center; padding: 30px 24px; color: rgba(255,255,255,0.4); font-size: 13px; font-weight: 500; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+        /* Responsive */
+        @media (max-width: 1199px) { .form-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 991px) { .header-inner { padding: 12px 20px; } .card-header-glass { padding: 16px 20px; } .card-body-glass { padding: 20px; } .data-table { font-size: 11px; } .data-table thead th, .data-table tbody td { padding: 10px 6px; } .page-title { font-size: 28px; } .modal-content { max-width: 95%; } }
+        @media (max-width: 767px) { .container { padding: 0 16px; } .header-inner { padding: 10px 16px; } .logo-text { font-size: 16px; } .menu-btn, .header-btn { width: 40px; height: 40px; } .breadcrumb-bar { padding-top: 80px; } .breadcrumb-inner { padding: 0 16px; } .form-grid { grid-template-columns: 1fr; } .card-header-glass { padding: 16px; } .card-body-glass { padding: 16px; } .page-title { font-size: 24px; } .btn-glass { padding: 10px 18px; font-size: 13px; } .data-table thead { display: none; } .data-table tbody tr { display: block; margin-bottom: 16px; background: rgba(255,255,255,0.06); border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; } .data-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: right; } .data-table tbody td::before { content: attr(data-label); font-weight: 600; color: rgba(255,255,255,0.6); font-size: 11px; text-transform: uppercase; } .data-table tbody tr:last-child td:first-child, .data-table tbody tr:last-child td:last-child { border-radius: 0; } .data-table tbody tr td:last-child { border-bottom: none; justify-content: center; } .sidebar { width: 280px; } .modal-content { max-height: 85vh; } .modal-body { padding: 16px; } }
+        @media (max-width: 575px) { .breadcrumb-bar { padding-top: 75px; } .page-header { margin-bottom: 24px; } .page-badge { font-size: 11px; padding: 6px 12px; } .page-title { font-size: 20px; } .page-subtitle { font-size: 12px; } .card-header-title { font-size: 14px; } .card-header-title i { width: 32px; height: 32px; font-size: 14px; } .form-input { padding: 10px 14px; font-size: 13px; } .footer { padding: 20px 16px; font-size: 11px; } .btn-action-group { flex-direction: row; } }
+
+        /* Loading */
+        .loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--dark); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; transition: opacity 0.5s, visibility 0.5s; }
+        .loading-screen.hidden { opacity: 0; visibility: hidden; }
+        .loader { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: white; margin-top: 20px; font-size: 14px; font-weight: 500; letter-spacing: 2px; animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+		.ganti-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: rgba(255,255,255,0.85);
+    font-size: 14px;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    transition: all 0.3s;
+}
+
+.ganti-option:hover {
+    border-color: rgba(59,130,246,0.5);
+    background: rgba(59,130,246,0.08);
+}
+
+.ganti-option input {
+    accent-color: #3b82f6;
+    width: 18px;
+    height: 18px;
+}
+
+.ganti-option i {
+    color: #60a5fa;
+}
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loader"></div>
+        <div class="loading-text">MEMUAT KARTIKA 2...</div>
+    </div>
+
+    <div class="bg-particles">
+        <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+        <div class="particle"></div><div class="particle"></div>
+    </div>
+    <div class="glass-overlay"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button class="sidebar-close" onclick="toggleSidebar()"><i class="fas fa-times"></i></button>
+            <div class="sidebar-user">
+                <div class="sidebar-avatar">👤</div>
+                <div class="sidebar-user-info"><h3>Administrator</h3><p>admin@inventaris.id</p></div>
+            </div>
+        </div>
+        <nav class="sidebar-menu">
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Menu Utama</div>
+                <a href="index_modern.php" class="sidebar-item" onclick="toggleSidebar()"><i class="fas fa-home"></i> Beranda</a>
+                <a href="inventaris.php" class="sidebar-item active" onclick="toggleSidebar()"><i class="fas fa-warehouse"></i> Data Inventaris</a>
+                <a href="kegiatan.php" class="sidebar-item" onclick="toggleSidebar()"><i class="fas fa-clipboard-list"></i> Data Kegiatan</a>
+                <a href="jaringan.php" class="sidebar-item" onclick="toggleSidebar()"><i class="fas fa-network-wired"></i> Data Jaringan</a>
+                <a href="laporan.php" class="sidebar-item" onclick="toggleSidebar()"><i class="fas fa-chart-bar"></i> Data Laporan</a>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Pengaturan</div>
+                <a href="#" class="sidebar-item" onclick="toggleSidebar()"><i class="fas fa-user-cog"></i> Profil</a>
+                <a href="#" class="sidebar-item" onclick="toggleSidebar()"><i class="fas fa-cog"></i> Pengaturan</a>
+                <a href="#" class="sidebar-item" onclick="toggleSidebar()"><i class="fas fa-sign-out-alt"></i> Keluar</a>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="header-inner">
+            <div class="header-left">
+                <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu"><i class="fas fa-bars"></i></button>
+                <div class="logo">
+                    <div class="logo-icon"><i class="fas fa-cubes"></i></div>
+                    <span class="logo-text">Inventaris<span>Digital</span></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="header-btn" onclick="alert('Fitur pencarian akan segera hadir!')"><i class="fas fa-search"></i></button>
+                <button class="header-btn" onclick="location.reload()"><i class="fas fa-redo-alt"></i></button>
+                <button class="header-btn" onclick="alert('Tidak ada notifikasi baru')"><i class="fas fa-bell"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb-bar">
+        <div class="breadcrumb-inner">
+            <div class="breadcrumb">
+                <a href="index_modern.php"><i class="fas fa-home"></i> Beranda</a>
+                <i class="fas fa-chevron-right"></i>
+                <a href="inventaris.php">Data Inventaris</a>
+                <i class="fas fa-chevron-right"></i>
+                <span class="breadcrumb-current">Kartika 2</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Page Header -->
+            <section class="page-header">
+                <div class="page-badge"><i class="fas fa-door-closed"></i> Ruangan Kartika 2</div>
+                <h1 class="page-title">Data Inventaris <span class="gradient-text">Hardware & PC EDP</span></h1>
+                <p class="page-subtitle">Input dan kelola data inventaris komputer, monitor, printer, dan perangkat EDP ruangan Kartika 2.</p>
+            </section>
+
+            <!-- Form Input -->
+            <div class="glass-card" style="animation: fadeInUp 0.8s ease-out 0.1s both;">
+                <div class="card-header-glass">
+                    <div class="card-header-title"><i class="fas fa-plus-circle"></i> Tambah Data Inventaris</div>
+                    <a href="inventaris.php" class="btn-glass btn-back-glass"><i class="fas fa-arrow-left"></i> Kembali</a>
+                </div>
+                <div class="card-body-glass">
+                    <form method="POST" action="">
+                        <div class="form-grid">
+                            <div class="form-group"><label class="form-label">Gedung</label><input type="text" name="gedung" class="form-input" placeholder="Contoh: Gedung A" required></div>
+                            <div class="form-group"><label class="form-label">Lantai</label><input type="text" name="lantai" class="form-input" placeholder="Contoh: Lantai 2" required></div>
+                            <div class="form-group"><label class="form-label">Ruangan</label><input type="text" name="ruangan" class="form-input" placeholder="Contoh: Kartika 2" required></div>
+                            <div class="form-group"><label class="form-label">Nama PC</label><input type="text" name="nama_pc" class="form-input" placeholder="Contoh: PC-EDP-01" required></div>
+                            <div class="form-group"><label class="form-label">Nama User</label><input type="text" name="nama_user" class="form-input" placeholder="Contoh: Budi Santoso" required></div>
+                            <div class="form-group"><label class="form-label">Manufactur</label><input type="text" name="manufactur" class="form-input" placeholder="Contoh: Dell, HP, Lenovo"></div>
+                            <div class="form-group"><label class="form-label">Processor Type</label><input type="text" name="processor_type" class="form-input" placeholder="Contoh: Intel Core i5-10400"></div>
+                            <div class="form-group"><label class="form-label">Windows Version</label><input type="text" name="windows_version" class="form-input" placeholder="Contoh: Windows 10 Pro"></div>
+                            <div class="form-group"><label class="form-label">RAM Size</label><input type="text" name="ram_size" class="form-input" placeholder="Contoh: 8GB DDR4"></div>
+                            <div class="form-group"><label class="form-label">Hardisk</label><input type="text" name="ram_hardisk" class="form-input" placeholder="Contoh: 512GB SSD"></div>
+                            <div class="form-group"><label class="form-label">Monitor Model</label><input type="text" name="monitor_model" class="form-input" placeholder="Contoh: Dell P2419H"></div>
+                            <div class="form-group"><label class="form-label">Monitor Size</label><input type="text" name="monitor_size" class="form-input" placeholder="Contoh: 24 Inch"></div>
+                            <div class="form-group"><label class="form-label">Monitor VGA</label><input type="text" name="monitor_vga" class="form-input" placeholder="Contoh: HDMI, DisplayPort"></div>
+                            <div class="form-group"><label class="form-label">Printer 1</label><input type="text" name="printer_1" class="form-input" placeholder="Contoh: Canon PIXMA"></div>
+                            <div class="form-group"><label class="form-label">Printer 2</label><input type="text" name="printer_2" class="form-input" placeholder="Contoh: Epson L3110"></div>
+                            <div class="form-group"><label class="form-label">Tahun Pengadaan</label><input type="number" name="tahun_pengadaan" class="form-input" placeholder="Contoh: 2024" min="2000" max="2099"></div>
+                            <div class="form-group"><label class="form-label">ID Personil EDP</label><input type="text" name="id_personil_edp" class="form-input" placeholder="Contoh: EDP-001"></div>
+                            <div class="form-group" style="display:flex; align-items:flex-end;"><button type="submit" class="btn-glass btn-success-glass" style="width:100%;"><i class="fas fa-save"></i> Simpan Data</button></div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- Tabel Data -->
+            <div class="glass-card" style="animation: fadeInUp 0.8s ease-out 0.2s both;">
+                <div class="card-header-glass">
+                    <div class="card-header-title"><i class="fas fa-table"></i> Daftar Inventaris Kartika 2</div>
+                    <span class="td-badge badge-cyan"><i class="fas fa-database" style="margin-right:4px;"></i> 
+                        <?php 
+                        $count = mysqli_query($conn, "SELECT COUNT(*) as total FROM inventaris_kartika2");
+                        $total = mysqli_fetch_assoc($count)['total'];
+                        echo $total . ' Data'; 
+                        ?>
+                    </span>
+                </div>
+                <div class="card-body-glass">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>Gedung</th>
+                                    <th>Lantai</th>
+                                    <th>Ruangan</th>
+                                    <th>Nama PC</th>
+                                    <th>Nama User</th>
+                                    <th>Manufactur</th>
+                                    <th>Processor</th>
+                                    <th>Windows</th>
+                                    <th>RAM</th>
+                                    <th>Hardisk</th>
+                                    <th>Monitor</th>
+                                    <th>Size</th>
+                                    <th>VGA</th>
+                                    <th>Printer 1</th>
+                                    <th>Printer 2</th>
+                                    <th>Tahun</th>
+                                    <th>EDP ID</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $no = 1;
+                                $query = mysqli_query($conn, "SELECT * FROM inventaris_kartika2 ORDER BY id DESC");
+                                if (mysqli_num_rows($query) > 0) {
+                                    while ($row = mysqli_fetch_assoc($query)) {
+                                ?>
+                                <tr>
+                                    <td data-label="No" class="td-center"><span class="td-badge badge-purple"><?= $no++; ?></span></td>
+                                    <td data-label="Gedung"><span class="td-badge badge-cyan"><?= htmlspecialchars($row['gedung']); ?></span></td>
+                                    <td data-label="Lantai"><?= htmlspecialchars($row['lantai']); ?></td>
+                                    <td data-label="Ruangan"><span class="td-badge badge-pink"><?= htmlspecialchars($row['ruangan']); ?></span></td>
+                                    <td data-label="Nama PC"><strong><?= htmlspecialchars($row['nama_pc']); ?></strong></td>
+                                    <td data-label="Nama User"><?= htmlspecialchars($row['nama_user']); ?></td>
+                                    <td data-label="Manufactur"><?= htmlspecialchars($row['manufactur']); ?></td>
+                                    <td data-label="Processor"><span class="td-small"><?= htmlspecialchars($row['processor_type']); ?></span></td>
+                                    <td data-label="Windows"><span class="td-badge badge-green"><?= htmlspecialchars($row['windows_version']); ?></span></td>
+                                    <td data-label="RAM"><span class="td-badge badge-cyan"><?= htmlspecialchars($row['ram_size']); ?></span></td>
+                                    <td data-label="Hardisk"><span class="td-badge badge-green"><?= htmlspecialchars($row['ram_hardisk']); ?></span></td>
+                                    <td data-label="Monitor"><?= htmlspecialchars($row['monitor_model']); ?></td>
+                                    <td data-label="Size"><?= htmlspecialchars($row['monitor_size']); ?></td>
+                                    <td data-label="VGA"><span class="td-small"><?= htmlspecialchars($row['monitor_vga']); ?></span></td>
+                                    <td data-label="Printer 1"><?= $row['printer_1'] ? htmlspecialchars($row['printer_1']) : '-'; ?></td>
+                                    <td data-label="Printer 2"><?= $row['printer_2'] ? htmlspecialchars($row['printer_2']) : '-'; ?></td>
+                                    <td data-label="Tahun" class="td-center"><span class="td-badge badge-orange"><?= htmlspecialchars($row['tahun_pengadaan']); ?></span></td>
+                                    <td data-label="EDP ID" class="td-center"><span class="td-badge badge-purple"><?= htmlspecialchars($row['id_personil_edp']); ?></span></td>
+                                    <td data-label="Aksi">
+                                        <div class="btn-action-group">
+                                            <button type="button" class="btn-glass btn-warning-glass" onclick="openEditModal(<?= $row['id']; ?>)"><i class="fas fa-edit"></i> Edit</button>
+                                            <button type="button" class="btn-glass btn-info-glass" onclick="openGantiModal(<?= $row['id']; ?>)"><i class="fas fa-warehouse"></i> Ganti</button>
+                                            <button type="button" class="btn-glass btn-danger-glass" onclick="openDisposalModal(<?= $row['id']; ?>)"><i class="fas fa-trash-alt"></i> Disposal</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php } } else { ?>
+                                <tr>
+                                    <td colspan="19">
+                                        <div class="empty-state">
+                                            <i class="fas fa-inbox"></i>
+                                            <h4>Belum Ada Data</h4>
+                                            <p>Silakan tambah data inventaris menggunakan form di atas.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php } ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!-- ===== MODAL EDIT ===== -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header edit">
+                <div class="modal-title"><i class="fas fa-edit icon-edit"></i> Edit Data Inventaris</div>
+                <button class="modal-close" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <form method="POST" action="" id="editForm">
+                <input type="hidden" name="edit_id" id="edit_id">
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group"><label class="form-label">Gedung</label><input type="text" name="gedung" id="edit_gedung" class="form-input" required></div>
+                        <div class="form-group"><label class="form-label">Lantai</label><input type="text" name="lantai" id="edit_lantai" class="form-input" required></div>
+                        <div class="form-group"><label class="form-label">Ruangan</label><input type="text" name="ruangan" id="edit_ruangan" class="form-input" required></div>
+                        <div class="form-group"><label class="form-label">Nama PC</label><input type="text" name="nama_pc" id="edit_nama_pc" class="form-input" required></div>
+                        <div class="form-group"><label class="form-label">Nama User</label><input type="text" name="nama_user" id="edit_nama_user" class="form-input" required></div>
+                        <div class="form-group"><label class="form-label">Manufactur</label><input type="text" name="manufactur" id="edit_manufactur" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Processor Type</label><input type="text" name="processor_type" id="edit_processor_type" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Windows Version</label><input type="text" name="windows_version" id="edit_windows_version" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">RAM Size</label><input type="text" name="ram_size" id="edit_ram_size" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Hardisk</label><input type="text" name="ram_hardisk" id="edit_ram_hardisk" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Monitor Model</label><input type="text" name="monitor_model" id="edit_monitor_model" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Monitor Size</label><input type="text" name="monitor_size" id="edit_monitor_size" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Monitor VGA</label><input type="text" name="monitor_vga" id="edit_monitor_vga" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Printer 1</label><input type="text" name="printer_1" id="edit_printer_1" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Printer 2</label><input type="text" name="printer_2" id="edit_printer_2" class="form-input"></div>
+                        <div class="form-group"><label class="form-label">Tahun Pengadaan</label><input type="number" name="tahun_pengadaan" id="edit_tahun_pengadaan" class="form-input" min="2000" max="2099"></div>
+                        <div class="form-group"><label class="form-label">ID Personil EDP</label><input type="text" name="id_personil_edp" id="edit_id_personil_edp" class="form-input"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-glass btn-back-glass" onclick="closeEditModal()"><i class="fas fa-times"></i> Batal</button>
+                    <button type="submit" class="btn-glass btn-success-glass"><i class="fas fa-save"></i> Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== MODAL GANTI (KE GUDANG) ===== -->
+<div class="modal-overlay" id="gantiModal">
+    <div class="modal-content">
+
+        <div class="modal-header ganti">
+            <div class="modal-title">
+                <i class="fas fa-warehouse icon-ganti"></i>
+                Ganti Barang - Pindah ke Gudang
+            </div>
+
+            <button class="modal-close" onclick="closeGantiModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="" id="gantiForm">
+
+            <input type="hidden" name="ganti_id" id="ganti_id">
+
+            <div class="modal-body">
+
+                <div class="info-box" style="border-color: rgba(59,130,246,0.3);">
+                    <p>
+                        <i class="fas fa-info-circle"
+                           style="color:#60a5fa; margin-right:6px;"></i>
+
+                        <strong>Perhatian!</strong>
+                        Pilih barang yang akan
+                        <strong>dipindahkan ke Gudang</strong>.
+                        Barang lain tetap tinggal di inventaris aktif.
+                    </p>
+                </div>
+
+                <div class="form-grid" style="grid-template-columns: 1fr;">
+
+                    <!-- PILIH BARANG -->
+                    <div class="form-group">
+
+                        <label class="form-label">
+                            Pilih Barang
+                            <span style="color:#f87171">*</span>
+                        </label>
+
+                        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+
+                            <!-- PC -->
+                            <label class="ganti-option">
+                                <input type="radio"
+                                       name="tipe_ganti"
+                                       value="pc"
+                                       checked>
+
+                                <i class="fas fa-desktop"></i>
+                                PC Saja
+                            </label>
+
+                            <!-- PRINTER 1 -->
+                            <label class="ganti-option">
+                                <input type="radio"
+                                       name="tipe_ganti"
+                                       value="printer1">
+
+                                <i class="fas fa-print"></i>
+                                Printer 1
+                            </label>
+
+                            <!-- PRINTER 2 -->
+                            <label class="ganti-option">
+                                <input type="radio"
+                                       name="tipe_ganti"
+                                       value="printer2">
+
+                                <i class="fas fa-print"></i>
+                                Printer 2
+                            </label>
+
+                            <!-- SEMUA -->
+                            <label class="ganti-option">
+                                <input type="radio"
+                                       name="tipe_ganti"
+                                       value="semua">
+
+                                <i class="fas fa-box"></i>
+                                PC + Semua Printer
+                            </label>
+
+                        </div>
+                    </div>
+
+                    <!-- ALASAN -->
+                    <div class="form-group">
+
+                        <label class="form-label">
+                            Alasan Diganti
+                            <span style="color:#f87171">*</span>
+                        </label>
+
+                        <textarea
+                            name="alasan_ganti"
+                            id="ganti_alasan"
+                            class="form-input"
+                            placeholder="Contoh: Upgrade ke PC baru, kerusakan hardware, penggantian printer, dll."
+                            required></textarea>
+
+                    </div>
+
+                    <!-- STATUS GUDANG -->
+                    <div class="form-group">
+
+                        <label class="form-label">
+                            Status di Gudang
+                        </label>
+
+                        <select name="status_gudang" class="form-input">
+
+                            <option value="Stok">
+                                Stok (Siap dipakai kembali)
+                            </option>
+
+                            <option value="Perbaikan">
+                                Perbaikan (Butuh perbaikan)
+                            </option>
+
+                            <option value="Siap Pakai">
+                                Siap Pakai (Langsung bisa dipakai)
+                            </option>
+
+                            <option value="Rusak">
+                                Rusak (Tidak bisa dipakai)
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button type="button"
+                        class="btn-glass btn-back-glass"
+                        onclick="closeGantiModal()">
+
+                    <i class="fas fa-times"></i>
+                    Batal
+
+                </button>
+
+                <button type="submit"
+                        class="btn-glass btn-info-glass"
+                        onclick="return confirm('Yakin ingin memindahkan barang yang dipilih ke gudang?')">
+
+                    <i class="fas fa-warehouse"></i>
+                    Pindahkan ke Gudang
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+</div>
+    <!-- ===== MODAL DISPOSAL ===== -->
+    <div class="modal-overlay" id="disposalModal">
+        <div class="modal-content">
+            <div class="modal-header disposal">
+                <div class="modal-title"><i class="fas fa-trash-alt icon-disposal"></i> Disposal Barang</div>
+                <button class="modal-close" onclick="closeDisposalModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <form method="POST" action="disposal.php" id="disposalForm">
+                <input type="hidden" name="proses_disposal" value="1">
+                <input type="hidden" name="sumber" value="kartika2">
+                <input type="hidden" name="id_asal" id="disposal_id">
+                <div class="modal-body">
+                    <div class="info-box" style="border-color: rgba(239,68,68,0.3);">
+                        <p><i class="fas fa-exclamation-triangle" style="color:#f87171; margin-right:6px;"></i>
+                        <strong>Perhatian!</strong> Pilih barang yang akan <strong>dipindahkan ke Tabel Disposal</strong>. Barang lain tetap tinggal di inventaris aktif.</p>
+                    </div>
+                    <div class="form-grid" style="grid-template-columns: 1fr;">
+                        <div class="form-group">
+                            <label class="form-label">Pilih Barang <span style="color:#f87171">*</span></label>
+                            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:rgba(255,255,255,0.85); font-size:14px; padding:10px 16px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:12px; transition:all 0.3s;" onmouseover="this.style.borderColor='rgba(239,68,68,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+                                    <input type="radio" name="tipe_disposal" value="pc" style="accent-color:#ef4444; width:18px; height:18px;" checked>
+                                    <i class="fas fa-desktop"></i> PC Saja
+                                </label>
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:rgba(255,255,255,0.85); font-size:14px; padding:10px 16px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:12px; transition:all 0.3s;" onmouseover="this.style.borderColor='rgba(239,68,68,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+                                    <input type="radio" name="tipe_disposal" value="printer1" style="accent-color:#ef4444; width:18px; height:18px;">
+                                    <i class="fas fa-print"></i> Printer 1
+                                </label>
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:rgba(255,255,255,0.85); font-size:14px; padding:10px 16px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:12px; transition:all 0.3s;" onmouseover="this.style.borderColor='rgba(239,68,68,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+                                    <input type="radio" name="tipe_disposal" value="printer2" style="accent-color:#ef4444; width:18px; height:18px;">
+                                    <i class="fas fa-print"></i> Printer 2
+                                </label>
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:rgba(255,255,255,0.85); font-size:14px; padding:10px 16px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:12px; transition:all 0.3s;" onmouseover="this.style.borderColor='rgba(239,68,68,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+                                    <input type="radio" name="tipe_disposal" value="semua" style="accent-color:#ef4444; width:18px; height:18px;">
+                                    <i class="fas fa-box"></i> PC + Semua Printer
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Alasan Disposal <span style="color:#f87171">*</span></label>
+                            <textarea name="alasan_disposal" id="disposal_alasan" class="form-input" placeholder="Contoh: Barang rusak total, Sudah tidak layak pakai, Obsolete, dll." required></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-glass btn-back-glass" onclick="closeDisposalModal()"><i class="fas fa-times"></i> Batal</button>
+                    <button type="submit" class="btn-glass btn-danger-glass" onclick="return confirm('Yakin ingin melakukan disposal? Data yang dipilih akan dipindahkan ke disposal.php.')"><i class="fas fa-trash-alt"></i> Proses Disposal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; <?php echo date('Y'); ?> Inventaris Digital. Dibangun dengan <i class="fas fa-heart" style="color:#ec4899"></i> untuk Indonesia.</p>
+    </footer>
+
+    <script>
+        const inventarisData = <?= json_encode(mysqli_fetch_all(mysqli_query($conn, "SELECT * FROM inventaris_kartika2"), MYSQLI_ASSOC)); ?>;
+
+        window.addEventListener('load', function() {
+            setTimeout(() => { document.getElementById('loadingScreen').classList.add('hidden'); }, 800);
+        });
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+            document.body.style.overflow = sidebar.classList.contains('active') ? 'hidden' : '';
+        }
+
+        window.addEventListener('scroll', function() {
+            const header = document.getElementById('header');
+            if (window.scrollY > 20) header.classList.add('scrolled');
+            else header.classList.remove('scrolled');
+        });
+
+        document.querySelectorAll('.header-btn, .menu-btn').forEach(el => {
+            el.addEventListener('touchstart', function() { this.style.transform = 'scale(0.97)'; });
+            el.addEventListener('touchend', function() { this.style.transform = ''; });
+        });
+
+        // ===== MODAL FUNCTIONS =====
+        function openEditModal(id) {
+            const data = inventarisData.find(item => item.id == id);
+            if (!data) return;
+            document.getElementById('edit_id').value = data.id;
+            document.getElementById('edit_gedung').value = data.gedung || '';
+            document.getElementById('edit_lantai').value = data.lantai || '';
+            document.getElementById('edit_ruangan').value = data.ruangan || '';
+            document.getElementById('edit_nama_pc').value = data.nama_pc || '';
+            document.getElementById('edit_nama_user').value = data.nama_user || '';
+            document.getElementById('edit_manufactur').value = data.manufactur || '';
+            document.getElementById('edit_processor_type').value = data.processor_type || '';
+            document.getElementById('edit_windows_version').value = data.windows_version || '';
+            document.getElementById('edit_ram_size').value = data.ram_size || '';
+            document.getElementById('edit_ram_hardisk').value = data.ram_hardisk || '';
+            document.getElementById('edit_monitor_model').value = data.monitor_model || '';
+            document.getElementById('edit_monitor_size').value = data.monitor_size || '';
+            document.getElementById('edit_monitor_vga').value = data.monitor_vga || '';
+            document.getElementById('edit_printer_1').value = data.printer_1 || '';
+            document.getElementById('edit_printer_2').value = data.printer_2 || '';
+            document.getElementById('edit_tahun_pengadaan').value = data.tahun_pengadaan || '';
+            document.getElementById('edit_id_personil_edp').value = data.id_personil_edp || '';
+            document.getElementById('editModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeEditModal() { document.getElementById('editModal').classList.remove('active'); document.body.style.overflow = ''; }
+
+        function openGantiModal(id) {
+            document.getElementById('ganti_id').value = id;
+            document.getElementById('ganti_alasan').value = '';
+            document.getElementById('gantiModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeGantiModal() { document.getElementById('gantiModal').classList.remove('active'); document.body.style.overflow = ''; }
+
+        function openDisposalModal(id) {
+            document.getElementById('disposal_id').value = id;
+            document.getElementById('disposal_alasan').value = '';
+            document.getElementById('disposalModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeDisposalModal() { document.getElementById('disposalModal').classList.remove('active'); document.body.style.overflow = ''; }
+
+        // Close modal on overlay click
+        ['editModal','gantiModal','disposalModal'].forEach(id => {
+            document.getElementById(id).addEventListener('click', function(e) {
+                if (e.target === this) {
+                    if (id === 'editModal') closeEditModal();
+                    if (id === 'gantiModal') closeGantiModal();
+                    if (id === 'disposalModal') closeDisposalModal();
+                }
+            });
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { closeEditModal(); closeGantiModal(); closeDisposalModal(); }
+        });
+    </script>
+</body>
+</html>
